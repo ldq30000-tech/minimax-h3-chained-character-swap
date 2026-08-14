@@ -1,0 +1,59 @@
+{
+  "workflow": "../assets/workflows/t3-ref2va-context-taper-template.json",
+  "comfy_url": "http://127.0.0.1:8188",
+  "comfy_input_dir": "/path/to/ComfyUI/input",
+  "comfy_output_dir": "/path/to/ComfyUI/output",
+  "run_dir": "../runs/my-character-swap",
+
+  "initial_delivery": "/absolute/path/to/clean_segment_01_delivery_124f.mp4",
+  "reference_images": {
+    "40": "/absolute/path/to/character_front.png",
+    "41": "/absolute/path/to/character_side.png",
+    "42": "/absolute/path/to/character_back.png",
+    "50": "/absolute/path/to/character_face_closeup.png"
+  },
+
+  "raw_frames": 124,
+  "context_frames": 22,
+  "steps": 20,
+  "width": 576,
+  "height": 1024,
+  "seed_base": 730000,
+  "timeout_seconds": 5400,
+  "phase_search": 12,
+  "phase_segments": 3,
+
+  "taper": {
+    "alpha": 0.45,
+    "alpha_end": 0.1,
+    "ramp_frames": 3
+  },
+
+  "gates": {
+    "max_abs_phase_offset": 2,
+    "min_phase_ncc": 0.3,
+    "max_seam_diff": 0.04,
+    "min_sharpness_ratio": 0.75
+  },
+
+  "nodes": {
+    "source_video": "43",
+    "context_video": "101",
+    "plan": "100",
+    "raw_output": "19",
+    "delivery_output": "108"
+  },
+
+  "segments": [
+    {
+      "name": "seg02",
+      "seed": 730002,
+      "source": "/absolute/path/to/source_slice_seg02_124f.mp4"
+    },
+    {
+      "name": "seg03",
+      "seed": 730003,
+      "source": "/absolute/path/to/source_slice_seg03_124f.mp4"
+    }
+  ]
+}

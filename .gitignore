@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local ComfyUI inputs / outputs / render caches
+inputs/
+outputs/
+renders/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.flac
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Runner artifacts
+runs/

@@ -1,0 +1,432 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load H3 Ref2VA INT8"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load H3 text encoder"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load H3 video VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load H3 audio VAE required by Ref2VA; no context/audio refs"
+    }
+  },
+  "12": {
+    "inputs": {
+      "noise_seed": [
+        "104",
+        5
+      ]
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "B noise seed = 20203"
+    }
+  },
+  "13": {
+    "inputs": {
+      "sampler_name": "res_multistep"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "Sampler"
+    }
+  },
+  "14": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "scheduler": "beta",
+      "steps": [
+        "104",
+        7
+      ],
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "beta / 20 steps"
+    }
+  },
+  "15": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "105",
+        0
+      ]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {
+      "title": "Treatment guider: ChainContext conditioning"
+    }
+  },
+  "16": {
+    "inputs": {
+      "noise": [
+        "12",
+        0
+      ],
+      "guider": [
+        "15",
+        0
+      ],
+      "sampler": [
+        "13",
+        0
+      ],
+      "sigmas": [
+        "14",
+        0
+      ],
+      "latent_image": [
+        "20",
+        1
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "Raw B sampler output"
+    }
+  },
+  "17": {
+    "inputs": {
+      "samples": [
+        "16",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode raw B"
+    }
+  },
+  "18": {
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "fps": 24.0,
+      "bit_depth": 8
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Raw B 124f"
+    }
+  },
+  "19": {
+    "inputs": {
+      "video": [
+        "18",
+        0
+      ],
+      "filename_prefix": "noiseinj_t3_v5_motion_context/treatment_s20203_raw_B124",
+      "format": "mp4",
+      "codec": "auto"
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "SAVE raw B"
+    }
+  },
+  "20": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "prompt": [
+        "104",
+        4
+      ],
+      "width": [
+        "104",
+        8
+      ],
+      "height": [
+        "104",
+        9
+      ],
+      "length": [
+        "104",
+        6
+      ],
+      "ref_image_size": "match",
+      "ref_images.ref_image_0": [
+        "40",
+        0
+      ],
+      "ref_images.ref_image_1": [
+        "41",
+        0
+      ],
+      "ref_images.ref_image_2": [
+        "42",
+        0
+      ],
+      "ref_images.ref_image_3": [
+        "50",
+        0
+      ],
+      "ref_videos.ref_video_0": [
+        "49",
+        0
+      ]
+    },
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "_meta": {
+      "title": "Stock Ref2VA: four identity images + Video1 only"
+    }
+  },
+  "40": {
+    "inputs": {
+      "image": "v5_officer_front.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Picture 1 front"
+    }
+  },
+  "41": {
+    "inputs": {
+      "image": "v5_officer_side.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Picture 2 side"
+    }
+  },
+  "42": {
+    "inputs": {
+      "image": "v5_officer_back.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Picture 3 back"
+    }
+  },
+  "50": {
+    "inputs": {
+      "image": "v5_officer_front_face_tight.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Picture 4 tight face"
+    }
+  },
+  "43": {
+    "inputs": {
+      "file": "v5_B_video1_src085_208_124f_noaudio.mp4"
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "Video1 source 85..208 (no audio)"
+    }
+  },
+  "49": {
+    "inputs": {
+      "video": [
+        "43",
+        0
+      ]
+    },
+    "class_type": "GetVideoComponents",
+    "_meta": {
+      "title": "Video1 frames only"
+    }
+  },
+  "100": {
+    "inputs": {
+      "plan_json": "{\"shots\": [{\"id\": \"v5_motion_context\", \"prompt\": \"subject_definitions:\\n<Subject 1> is the 3D game character Zhu Yuan in her officer uniform, whose complete appearance comes from <Picture 1>, <Picture 2>, <Picture 3>, and <Picture 4>. She completely replaces the female dancer in <Video 1>, while her motion, poses, timing, body position, and movement rhythm come from <Video 1>.\\n<Subject 2> is the environment in <Video 1>: the bright empty white-walled room with a wood floor, soft window light from the left, and fixed camera framing.\\n<Video 1> is the source video segment for the complete target timeline and defines every output frame from start to finish.\\n\\nsummary:\\n[video editing] The target video is an edited version of <Video 1> in which the entire female dancer is replaced by <Subject 1>. The complete output timeline, poses, speed, rhythm, composition, and camera framing follow <Video 1> one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout [Shot 1]): attribute_transfer - Zhu Yuan's complete face, hair, body appearance, and officer uniform from the reference pictures replace the dancer completely, while the dancer's body position, pose sequence, movement direction, speed, and timing are transferred from <Video 1> one-to-one.\\n<Subject 2> (appears throughout [Shot 1]): fully_preserved - the white-walled room, wood floor, lighting direction, camera position, framing, and shot size from <Video 1> are retained exactly; the wall remains clean white without color blotches, grain, compression blocks, or chromatic noise.\\n<Video 1> (complete target timeline and shot structure): fully_preserved - its complete temporal order, choreography, pace, framing, and fixed-camera structure define the target video through every physical output frame.\\n\\ndetailed_description:\\nThe target video uses a clean stylized 3D game-rendering look inside the same bright fixed-camera room shown in <Video 1>.\\n[Shot 1] In a fixed full-body vertical shot, <Subject 1>, Zhu Yuan with her complete appearance and officer uniform from <Picture 1>-<Picture 4>, replaces the female dancer throughout the frame. Her full body remains visible with the same body scale, floor position, camera framing, and room geometry as <Video 1>. Every pose, transition, movement direction, movement speed, and rhythm follows <Video 1> at the same timestamp from the first frame onward. Motion continues naturally through every physical output frame without slowing down, settling into a pose, restarting, replaying, compressing time, skipping forward, or anticipating the clip boundary. The room stays bright and stable, with a clean white wall, unchanged wood floor, fixed viewpoint, and no chromatic noise, blotches, grain, or compression artifacts.\\n\\noverall_soundscape:\\nN/A - the soundtrack is handled separately.\\n\\nnon_diegetic_music:\\nN/A\", \"length\": 124, \"steps\": 20, \"seed\": 20203}]}",
+      "run_name": "v5_motion_context_s20203",
+      "generation_fingerprint": "v5-motion-context|core-b1693ec|plugin-92f923f|legacy-expected|576x1024|beta20|res_multistep|four-refs|video1-85-208|no-v2-pic5-audio",
+      "width": 576,
+      "height": 1024,
+      "context_length": 22,
+      "encode_mode": "video",
+      "anchor_mode": "head",
+      "crop": "disabled",
+      "audio_mode": "generated_audio",
+      "audio_context_length": 22,
+      "default_duration_seconds": 5.1666667,
+      "default_steps": 20,
+      "base_seed": 20203,
+      "segment_crf": 18
+    },
+    "class_type": "MiniMaxH3ChainPlan",
+    "_meta": {
+      "title": "Plan: 22f visual-only head context"
+    }
+  },
+  "101": {
+    "inputs": {
+      "file": "v5_noiseinj_A_keep_tail22_taper3_a045-010.mp4"
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "A retained 0..106; tail is exact 85..106 context"
+    }
+  },
+  "102": {
+    "inputs": {
+      "plan": [
+        "100",
+        0
+      ],
+      "source_video": [
+        "101",
+        0
+      ],
+      "source_fps": 24.0,
+      "prepend_original": false
+    },
+    "class_type": "MiniMaxH3ChainExternalVideo",
+    "_meta": {
+      "title": "External A visual context; no audio"
+    }
+  },
+  "103": {
+    "inputs": {
+      "plan": [
+        "100",
+        0
+      ],
+      "start_clip": 1,
+      "external_context": [
+        "102",
+        0
+      ],
+      "scene_range": "1"
+    },
+    "class_type": "MiniMaxH3ChainLoopStart",
+    "_meta": {
+      "title": "Start single B continuation"
+    }
+  },
+  "104": {
+    "inputs": {
+      "state": [
+        "103",
+        1
+      ]
+    },
+    "class_type": "MiniMaxH3ChainCurrent",
+    "_meta": {
+      "title": "Expose exact B prompt / seed / 124f"
+    }
+  },
+  "105": {
+    "inputs": {
+      "state": [
+        "104",
+        0
+      ],
+      "conditioning": [
+        "20",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "latent": [
+        "20",
+        1
+      ]
+    },
+    "class_type": "MiniMaxH3ChainContext",
+    "_meta": {
+      "title": "22f video/head context, no audio context"
+    }
+  },
+  "106": {
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "trim_frames": [
+        "105",
+        1
+      ]
+    },
+    "class_type": "MiniMaxH3LoopTrim",
+    "_meta": {
+      "title": "Drop reproduced B 0..21"
+    }
+  },
+  "107": {
+    "inputs": {
+      "images": [
+        "106",
+        0
+      ],
+      "fps": 24.0,
+      "bit_depth": 8
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Trimmed B 102f"
+    }
+  },
+  "108": {
+    "inputs": {
+      "video": [
+        "107",
+        0
+      ],
+      "filename_prefix": "noiseinj_t3_v5_motion_context/treatment_s20203_trim_B022_123",
+      "format": "mp4",
+      "codec": "auto"
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "SAVE trim B"
+    }
+  }
+}
