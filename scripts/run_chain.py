@@ -32,6 +32,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,14 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ChainError(f"Expected an object in {path}")
     return value
+
+
+def validate_api_workflow(workflow: dict[str, Any], path: Path) -> None:
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict):
+            raise ChainError(f"Workflow {path} entry {node_id!r} is not a node object")
+        if not isinstance(node.get("class_type"), str) or not isinstance(node.get("inputs"), dict):
+            raise ChainError(f"Workflow {path} node {node_id!r} is missing class_type or inputs")
 
 
 def write_json(path: Path, value: dict[str, Any]) -> None:
@@ -111,6 +120,30 @@ def get_fps(path: Path) -> str:
     return fps
 
 
+def fps_value(path: Path) -> float:
+    try:
+        return float(Fraction(get_fps(path)))
+    except (ValueError, ZeroDivisionError) as exc:
+        raise ChainError(f"Cannot parse video fps: {path}") from exc
+
+
+def require_fps(path: Path, expected: float = 24.0, tolerance: float = 0.001) -> None:
+    actual = fps_value(path)
+    if abs(actual - expected) > tolerance:
+        raise ChainError(
+            f"{path} is {actual:.6g} fps; this workflow requires {expected:g} fps. "
+            f"Resample before slicing (for example: ffmpeg -i INPUT -vf fps=24 ...)."
+        )
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def ffmpeg_tail(source: Path, destination: Path, frames: int) -> None:
     count = frame_count(source)
     if count < frames:
@@ -126,15 +159,15 @@ def ffmpeg_tail(source: Path, destination: Path, frames: int) -> None:
         raise ChainError(f"Tail extraction produced wrong frame count: {destination}")
 
 
-def image_at(video: Path, index: int) -> Image.Image:
-    width, height = video_size(video)
+def image_at(video: Path, index: int, mode: str = "L", size: tuple[int, int] = (96, 170)) -> Image.Image:
     command = [
         "ffmpeg", "-v", "error", "-i", str(video), "-vf", f"select='eq(n\\,{index})'",
         "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-",
     ]
     result = subprocess.run(command, check=True, stdout=subprocess.PIPE)
     import io
-    return Image.open(io.BytesIO(result.stdout)).convert("L").resize((96, 170))
+    with Image.open(io.BytesIO(result.stdout)) as opened:
+        return opened.convert(mode).resize(size, Image.Resampling.LANCZOS)
 
 
 def normalized_diff(left: Image.Image, right: Image.Image) -> float:
@@ -151,12 +184,20 @@ def seam_diff(previous: Path, delivered: Path) -> float:
     return normalized_diff(image_at(previous, frame_count(previous) - 1), image_at(delivered, 0))
 
 
-def laplacian_variance(video: Path, skip: int, every: int = 4) -> float:
-    width, height = video_size(video)
+def laplacian_variance(
+    video: Path,
+    skip: int,
+    every: int = 4,
+    target_size: tuple[int, int] | None = None,
+) -> float:
+    width, height = target_size or video_size(video)
     frame_bytes = width * height
     lap = ImageFilter.Kernel((3, 3), (0, 1, 0, 1, -4, 1, 0, 1, 0), scale=1)
+    filters = "format=gray"
+    if target_size is not None:
+        filters = f"scale={width}:{height}:flags=lanczos,format=gray"
     process = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-i", str(video), "-vf", "format=gray", "-f", "rawvideo", "-"],
+        ["ffmpeg", "-v", "error", "-i", str(video), "-vf", filters, "-f", "rawvideo", "-"],
         stdout=subprocess.PIPE,
     )
     assert process.stdout is not None
@@ -181,7 +222,27 @@ def laplacian_variance(video: Path, skip: int, every: int = 4) -> float:
 
 def sharpness_ratio(delivered: Path, source: Path, context_frames: int) -> float:
     # Delivered frame 0 corresponds to source frame context_frames in the overlapping source slice.
-    return laplacian_variance(delivered, 0) / laplacian_variance(source, context_frames)
+    # Laplacian variance is resolution-sensitive, so compare at the delivered resolution.
+    size = video_size(delivered)
+    denominator = laplacian_variance(source, context_frames, target_size=size)
+    if denominator <= 0:
+        raise ChainError(f"Source sharpness is zero; cannot compute ratio: {source}")
+    return laplacian_variance(delivered, 0, target_size=size) / denominator
+
+
+def source_rms_difference(delivered: Path, source: Path, context_frames: int, samples: int = 3) -> float:
+    """Screen for the known failure where output is effectively the unchanged source."""
+    delivered_count = frame_count(delivered)
+    if delivered_count < 1:
+        raise ChainError(f"No frames available for source-difference screen: {delivered}")
+    sample_indices = sorted({round(i * (delivered_count - 1) / max(samples - 1, 1)) for i in range(samples)})
+    values: list[float] = []
+    for index in sample_indices:
+        generated = image_at(delivered, index, mode="RGB")
+        original = image_at(source, context_frames + index, mode="RGB")
+        rms = ImageStat.Stat(ImageChops.difference(generated, original)).rms
+        values.append(sum(rms) / len(rms))
+    return sum(values) / len(values)
 
 
 def http_json(url: str, endpoint: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -252,16 +313,24 @@ def wait_for_job(comfy_url: str, prompt_id: str, timeout_seconds: int) -> dict[s
     raise ChainError(f"Timed out waiting for ComfyUI job {prompt_id}")
 
 
+def parse_phase_output(output: str, expected_segments: int) -> tuple[list[int], list[float]]:
+    rows = re.findall(r"^\d+:\d+\s+(-?(?:\d+(?:\.\d*)?|\.\d+))\s+([+-]\d+)", output, flags=re.M)
+    if len(rows) != expected_segments:
+        raise ChainError(
+            f"Phase audit produced {len(rows)} parseable rows; expected {expected_segments}. "
+            "Inspect phase_screen.txt/output for unavailable or NaN ranges."
+        )
+    return [int(offset) for _, offset in rows], [float(ncc) for ncc, _ in rows]
+
+
 def parse_phase(raw: Path, source: Path, context_frames: int, raw_frames: int, search: int, segments: int) -> tuple[list[int], list[float], str]:
     result = run([
         sys.executable, PHASE_AUDIT, raw, source,
         "--start", str(context_frames), "--end", str(raw_frames - 1),
         "--search", str(search), "--segments", str(segments),
     ], timeout=900)
-    rows = re.findall(r"^\d+:\d+\s+([0-9.]+)\s+([+-]\d+)", result.stdout, flags=re.M)
-    if not rows:
-        raise ChainError("Phase audit did not produce parseable segment rows")
-    return [int(offset) for _, offset in rows], [float(ncc) for ncc, _ in rows], result.stdout
+    offsets, nccs = parse_phase_output(result.stdout, segments)
+    return offsets, nccs, result.stdout
 
 
 def unique_name(run_id: str, label: str, original: Path) -> str:
@@ -326,6 +395,12 @@ def evaluate(metrics: dict[str, Any], gates: dict[str, Any]) -> list[str]:
     min_sharpness = gates.get("min_sharpness_ratio")
     if min_sharpness is not None and metrics["sharpness_ratio"] < float(min_sharpness):
         failures.append(f"sharpness_ratio<{min_sharpness}: {metrics['sharpness_ratio']:.3f}")
+    min_source_difference = gates.get("min_source_rms_difference")
+    if min_source_difference is not None and metrics["source_rms_difference"] < float(min_source_difference):
+        failures.append(
+            f"source_rms_difference<{min_source_difference}: "
+            f"{metrics['source_rms_difference']:.3f} (possible output==source / failed identity replacement)"
+        )
     return failures
 
 
@@ -405,20 +480,43 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
     input_dir = resolve(base, str(config["comfy_input_dir"]))
     output_dir = resolve(base, str(config["comfy_output_dir"]))
     initial_delivery = resolve(base, str(config["initial_delivery"]))
+    if not workflow_template.is_file():
+        raise ChainError(f"workflow does not exist: {workflow_template}")
+    workflow_template_data = load_json(workflow_template)
+    validate_api_workflow(workflow_template_data, workflow_template)
     if not initial_delivery.is_file():
         raise ChainError(f"initial_delivery does not exist: {initial_delivery}")
+    require_fps(initial_delivery)
     if not input_dir.is_dir() or not output_dir.is_dir():
         raise ChainError("comfy_input_dir and comfy_output_dir must be existing local directories")
 
+    config_sha256 = file_sha256(config_path)
+    workflow_sha256 = file_sha256(workflow_template)
     chain = config["segments"]
     if not isinstance(chain, list) or not chain:
         raise ChainError("segments must be a non-empty list of continuation source slices")
+    segment_names: list[str] = []
+    for index, item in enumerate(chain):
+        if not isinstance(item, dict) or "source" not in item:
+            raise ChainError(f"segments[{index}] must be an object containing source")
+        name = str(item.get("name", f"seg{index + 2:02d}"))
+        if not name or name in {".", ".."} or "/" in name or "\\" in name:
+            raise ChainError(f"segments[{index}].name must be a single safe path component; got {name!r}")
+        segment_names.append(name)
+    if len(set(segment_names)) != len(segment_names):
+        raise ChainError(f"segment names must be unique: {segment_names}")
     raw_frames = ensure_number(config.get("raw_frames", 124), "raw_frames")
     context_frames = ensure_number(config.get("context_frames", 22), "context_frames")
+    if context_frames not in {1, 5, 22, 39}:
+        raise ChainError("context_frames must be one of the Motion Context plugin values: 1, 5, 22, 39")
     if (raw_frames - 5) % 17 != 0:
         raise ChainError(f"raw_frames must follow H3's 17k+5 grid (5, 22, 39, ..., 90, 107, 124, ...); got {raw_frames}")
     if raw_frames <= context_frames:
         raise ChainError("raw_frames must exceed context_frames")
+    if frame_count(initial_delivery) < context_frames:
+        raise ChainError(
+            f"initial_delivery has fewer than context_frames={context_frames} frames: {initial_delivery}"
+        )
     seed_base = ensure_number(config.get("seed_base", 730000), "seed_base")
     timeout = ensure_number(config.get("timeout_seconds", 5400), "timeout_seconds")
     phase_search = ensure_number(config.get("phase_search", 12), "phase_search")
@@ -440,6 +538,10 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
     alpha = float(taper.get("alpha", 0.45))
     alpha_end = float(taper.get("alpha_end", 0.10))
     ramp = ensure_number(taper.get("ramp_frames", 3), "taper.ramp_frames")
+    if not 0.0 <= alpha_end <= alpha <= 1.0:
+        raise ChainError("taper must satisfy 0 <= alpha_end <= alpha <= 1")
+    if ramp > context_frames:
+        raise ChainError("taper.ramp_frames must not exceed context_frames")
     gates = config.get("gates", {})
     if not isinstance(gates, dict):
         raise ChainError("gates must be an object")
@@ -454,6 +556,11 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
 
     if state_path.exists():
         state = load_json(state_path)
+        if state.get("config_sha256") != config_sha256 or state.get("workflow_sha256") != workflow_sha256:
+            raise ChainError(
+                "Config or workflow changed after this run started. Refusing to mix lineages. "
+                "Start a new run_dir, or deliberately migrate STATE.json after reviewing every completed artifact."
+            )
         status = state.get("status")
         if status == "needs_agent_review":
             if not approve_latest:
@@ -464,11 +571,29 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
                     "halt": state.get("halt"),
                 }, ensure_ascii=False, indent=2))
                 return 2
+            completed_for_approval = state.get("completed_segments")
+            if not isinstance(completed_for_approval, list) or not completed_for_approval:
+                raise ChainError("Cannot approve: STATE.json has no completed halted candidate")
+            approved_at = now()
+            approval = {
+                "segment": completed_for_approval[-1].get("name"),
+                "approved_at": approved_at,
+                "approved_by": "--approve-latest",
+                "gate_failures": completed_for_approval[-1].get("gate_failures", []),
+            }
+            completed_for_approval[-1]["approval"] = approval
+            approvals = state.setdefault("approvals", [])
+            if not isinstance(approvals, list):
+                raise ChainError("STATE.json approvals is malformed")
+            approvals.append(approval)
             state["status"] = "running"
-            state["approved_at"] = now()
-            state["approved_by"] = "--approve-latest"
             state.pop("halt", None)
             write_json(state_path, state)
+            qa_path = artifacts / str(approval["segment"]) / "qa.json"
+            if qa_path.is_file():
+                qa_record = load_json(qa_path)
+                qa_record["approval"] = approval
+                write_json(qa_path, qa_record)
         elif status == "completed":
             print(json.dumps({"status": "completed", "state": str(state_path)}, ensure_ascii=False))
             return 0
@@ -477,16 +602,20 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
     else:
         run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
         state = {
-            "version": 1,
+            "version": 2,
             "status": "running",
             "created_at": now(),
             "run_id": run_id,
             "config": str(config_path),
+            "config_sha256": config_sha256,
+            "workflow": str(workflow_template),
+            "workflow_sha256": workflow_sha256,
             "initial_delivery": str(initial_delivery),
             "context_frames": context_frames,
             "raw_frames": raw_frames,
             "deliver_frames": raw_frames - context_frames,
             "completed_segments": [],
+            "approvals": [],
         }
         write_json(state_path, state)
 
@@ -501,30 +630,45 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
         segment_cfg = chain[index]
         if not isinstance(segment_cfg, dict) or "source" not in segment_cfg:
             raise ChainError(f"segments[{index}] must be an object containing source")
-        label = str(segment_cfg.get("name", f"seg{index + 2:02d}"))
+        label = segment_names[index]
         source = resolve(base, str(segment_cfg["source"]))
         if not source.is_file():
             raise ChainError(f"Source slice missing for {label}: {source}")
+        require_fps(source)
         if frame_count(source) != raw_frames:
             raise ChainError(f"Source slice {source} must have exactly {raw_frames} frames")
-        seed = int(segment_cfg.get("seed", seed_base + index + 2))
+        try:
+            seed = int(segment_cfg.get("seed", seed_base + index + 2))
+            noise_seed = int(segment_cfg.get("noise_seed", seed ^ 0x5A17))
+        except (TypeError, ValueError) as exc:
+            raise ChainError(f"Invalid seed/noise_seed for {label}") from exc
         segment_dir = artifacts / label
         segment_dir.mkdir(parents=True, exist_ok=True)
 
-        clean_context = segment_dir / "context_clean_tail22.mp4"
-        injected_context = segment_dir / "context_injected_tail22.mp4"
+        clean_context = segment_dir / f"context_clean_tail{context_frames}.mp4"
+        injected_context = segment_dir / f"context_injected_tail{context_frames}.mp4"
         ffmpeg_tail(previous, clean_context, context_frames)
-        run([sys.executable, INJECT, clean_context, injected_context, context_frames, alpha, alpha_end, ramp], timeout=600)
+        run([
+            sys.executable, INJECT, clean_context, injected_context,
+            context_frames, alpha, alpha_end, ramp, "--seed", noise_seed,
+        ], timeout=600)
 
-        workflow = copy.deepcopy(load_json(workflow_template))
+        workflow = copy.deepcopy(workflow_template_data)
         prepare_static_inputs(config, base, input_dir, run_id, workflow)
         source_name = copy_to_input(source, input_dir, unique_name(run_id, f"{label}_source", source))
         context_name = copy_to_input(injected_context, input_dir, unique_name(run_id, f"{label}_context", injected_context))
-        try:
-            workflow[node_source]["inputs"]["file"] = source_name
-            workflow[node_context]["inputs"]["file"] = context_name
-        except (KeyError, TypeError) as exc:
-            raise ChainError("Configured source/context nodes are absent or not LoadVideo-style nodes") from exc
+        for node_id, role in (
+            (node_source, "source video"),
+            (node_context, "context video"),
+            (node_plan, "chain plan"),
+            (node_raw, "raw output"),
+            (node_delivery, "delivery output"),
+        ):
+            node = workflow.get(node_id)
+            if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+                raise ChainError(f"Configured {role} node {node_id} is absent or malformed")
+        workflow[node_source]["inputs"]["file"] = source_name
+        workflow[node_context]["inputs"]["file"] = context_name
         patch_plan(workflow, node_plan, segment_name=f"{run_id}_{label}_s{seed}", seed=seed,
                    raw_frames=raw_frames, steps=steps, context_frames=context_frames,
                    prompt=segment_cfg.get("prompt", base_prompt), width=width, height=height)
@@ -553,6 +697,8 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
             raise ChainError(f"Raw output for {label} has wrong frame count")
         if frame_count(delivery) != raw_frames - context_frames:
             raise ChainError(f"Trimmed delivery for {label} has wrong frame count")
+        require_fps(raw)
+        require_fps(delivery)
 
         offsets, nccs, phase_report = parse_phase(raw, source, context_frames, raw_frames, phase_search, phase_segments)
         (segment_dir / "phase_screen.txt").write_text(phase_report)
@@ -561,12 +707,14 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
             "phase_ncc": [round(value, 4) for value in nccs],
             "seam_diff": round(seam_diff(previous, delivery), 5),
             "sharpness_ratio": round(sharpness_ratio(delivery, source, context_frames), 4),
+            "source_rms_difference": round(source_rms_difference(delivery, source, context_frames), 3),
         }
         failures = evaluate(metrics, gates)
         record = {
             "index": index,
             "name": label,
             "seed": seed,
+            "noise_seed": noise_seed,
             "prompt_id": prompt_id,
             "source": str(source),
             "previous_delivery": str(previous),
@@ -589,13 +737,14 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
             if not audio_source.is_file():
                 raise ChainError(f"Audio source missing for {label}: {audio_source}")
             audio_offset = float(audio_cfg.get("offset_seconds", 0.0))
-            fps_text = get_fps(delivery)
-            fps_value = float(fps_text.split("/")[0]) / float(fps_text.split("/")[1]) if "/" in fps_text else float(fps_text)
+            if audio_offset < 0:
+                raise ChainError(f"Audio offset_seconds must be non-negative for {label}")
+            delivery_fps = fps_value(delivery)
             # offset_seconds marks where the source slice starts on the master
             # audio timeline; the delivery begins context_frames later.
-            delivery_offset = audio_offset + context_frames / fps_value
+            delivery_offset = audio_offset + context_frames / delivery_fps
             muxed = segment_dir / "delivery_with_audio.mp4"
-            mux_audio(delivery, audio_source, delivery_offset, (raw_frames - context_frames) / fps_value, muxed)
+            mux_audio(delivery, audio_source, delivery_offset, (raw_frames - context_frames) / delivery_fps, muxed)
             record["delivery_with_audio"] = str(muxed)
         write_json(segment_dir / "qa.json", record)
         completed.append(record)

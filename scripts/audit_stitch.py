@@ -7,8 +7,7 @@ seam positions and near-duplicate transitions introduced elsewhere in the video.
 Usage:
   audit_stitch.py video.mp4 --seams 123,247,371,495 [--freeze 0.001]
 
-Note: frames are downscaled to 96x170 before comparison (tuned for 576x1024
-portrait clips; other aspect ratios are compared distorted but consistently).
+Frames are downscaled with their aspect ratio preserved (long edge 170 px).
 """
 import argparse
 import glob
@@ -24,7 +23,8 @@ def extract(video: str, outdir: str) -> list[str]:
     os.makedirs(outdir)
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-i", video,
-         "-vf", "scale=96:170", os.path.join(outdir, "f_%05d.png")],
+         "-vf", "scale=170:170:force_original_aspect_ratio=decrease",
+         os.path.join(outdir, "f_%05d.png")],
         check=True,
     )
     return sorted(glob.glob(os.path.join(outdir, "f_*.png")))
@@ -53,11 +53,18 @@ def main() -> None:
     work = tempfile.mkdtemp(prefix="h3_stitch_audit_")
     try:
         frames = extract(args.video, os.path.join(work, "frames"))
+        if len(frames) < 2:
+            raise SystemExit("video must contain at least two frames")
         diffs = [ndiff(frames[i], frames[i + 1]) for i in range(len(frames) - 1)]
         print(f"video={args.video}")
         print(f"frames={len(frames)} seams={seams}")
         print("seam  diff     local_median  ratio")
         for seam in seams:
+            if seam < 0 or seam >= len(diffs):
+                raise SystemExit(
+                    f"invalid seam index {seam}; video has {len(frames)} frames "
+                    f"and valid seam indices are 0..{max(len(diffs) - 1, 0)}"
+                )
             neighbors = [
                 diffs[i] for i in range(max(0, seam - 6), min(len(diffs), seam + 7))
                 if i != seam

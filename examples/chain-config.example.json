@@ -33,7 +33,8 @@
     "max_abs_phase_offset": 2,
     "min_phase_ncc": 0.3,
     "max_seam_diff": 0.04,
-    "min_sharpness_ratio": 0.75
+    "min_sharpness_ratio": 0.75,
+    "min_source_rms_difference": 8.0
   },
 
   "nodes": {

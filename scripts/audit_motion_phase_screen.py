@@ -12,9 +12,9 @@ Usage:
       --search 12 --segments 3
 
 GEN[i] is nominally SOURCE[i]. A reported offset d compares GEN transitions
-in [a,b) against SOURCE[a+d,b+d). d>0 means the generation is behind (lagging)
-relative to the source; d<0 means it is ahead. The source video must cover the
-same nominal frame range as GEN.
+in [a,b) against SOURCE[a+d,b+d). Therefore d<0 means the generation is behind
+(lagging) relative to the source, while d>0 means it is ahead. The source video
+must cover the same nominal frame range as GEN.
 """
 import argparse
 import math
@@ -30,13 +30,18 @@ def extract(video: str, directory: Path) -> list[Image.Image]:
     directory.mkdir(parents=True)
     subprocess.run([
         "ffmpeg", "-y", "-v", "error", "-i", video,
-        "-vf", "scale=96:170", str(directory / "f_%05d.png"),
+        "-vf", "scale=170:170:force_original_aspect_ratio=decrease",
+        str(directory / "f_%05d.png"),
     ], check=True)
     images = []
     for path in sorted(directory.glob("f_*.png")):
-        image = Image.open(path).convert("L")
-        # Fixed camera; crop the subject/nearby floor rather than the wall.
-        images.append(image.crop((18, 10, 78, 164)))
+        with Image.open(path) as opened:
+            image = opened.convert("L")
+        # Relative center crop preserves the original aspect ratio and works for
+        # portrait or landscape, but still assumes the subject is near center.
+        width, height = image.size
+        images.append(image.crop((round(width * 0.18), round(height * 0.06),
+                                  round(width * 0.82), round(height * 0.965))))
     return images
 
 
@@ -83,6 +88,12 @@ def best_offset(gen: list[float], source: list[float], start: int, end: int, sea
     return best_score, offset, best_score - runner_up
 
 
+def interpretation(offset: int) -> str:
+    if offset == 0:
+        return "nominal"
+    return "generation lags source" if offset < 0 else "generation leads source"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("gen")
@@ -92,6 +103,10 @@ def main() -> None:
     parser.add_argument("--search", type=int, default=12)
     parser.add_argument("--segments", type=int, default=3)
     args = parser.parse_args()
+    if args.search < 0:
+        parser.error("--search must be non-negative")
+    if args.segments < 1:
+        parser.error("--segments must be positive")
     work = Path(tempfile.mkdtemp(prefix="h3_motion_phase_"))
     try:
         generated = extract(args.gen, work / "generated")
@@ -110,8 +125,10 @@ def main() -> None:
             if offset is None:
                 print(f"{begin:03d}:{finish:03d}  unavailable")
                 continue
-            direction = "nominal" if offset == 0 else ("generation lags source" if offset > 0 else "generation leads source")
-            print(f"{begin:03d}:{finish:03d}  {score:8.3f}  {offset:+6d}  {margin:19.3f}  {direction}")
+            print(
+                f"{begin:03d}:{finish:03d}  {score:8.3f}  {offset:+6d}  "
+                f"{margin:19.3f}  {interpretation(offset)}"
+            )
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

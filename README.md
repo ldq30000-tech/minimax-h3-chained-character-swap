@@ -91,11 +91,28 @@ ln -s /path/to/minimax-h3-chained-character-swap \
 
 - ComfyUI with MiniMax H3 Ref2VA support.
 - A compatible Motion Context node pack.
-- Python 3, FFmpeg, and Pillow (`python3 -m pip install -r requirements.txt`).
+- Python 3.10+, FFmpeg, and Pillow (`python3 -m pip install -r requirements.txt`).
+- 24 fps source slices. Resample other frame rates before slicing; the runner rejects non-24-fps inputs.
 - For the automatic runner: local or mounted access to the selected ComfyUI server's `input/` and `output/` directories.
 - Your own legal source video, target-character references, and model weights.
 
+The supplied workflows reference these loader filenames and must be adjusted if your installation uses different names:
+
+```text
+minimax_h3_ref2va_pruned_int8_convrot.safetensors
+qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+minimax_h3_video_vae_fp16.safetensors
+minimax_h3_audio_vae_fp32.safetensors
+```
+
 See [upstream dependencies and licensing](references/UPSTREAM_DEPENDENCIES.md) before use.
+
+## Development checks
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 -m py_compile scripts/*.py
+```
 
 ## License
 

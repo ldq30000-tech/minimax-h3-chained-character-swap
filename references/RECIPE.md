@@ -20,7 +20,7 @@ H3 lengths must follow the model's `17k + 5` grid. Dimensions must be multiples 
 
 **Segment length is configurable.** Shorter (e.g. 90f) or longer (e.g. 141/158f) segments are valid as long as they stay on the grid and exceed `context_frames`. Each continuation delivers `raw_frames − context_frames` new frames, so shorter segments mean more seams and more context overhead per delivered minute; longer segments accumulate more within-segment drift per generation. The model's trained range is ~124–362f — treat values outside it as experimental.
 
-**Resolution is a validated baseline, not a requirement.** 576×1024 is simply where the taper recipe and the gate values were measured. Match the output aspect ratio to your source (e.g. 960×544 for 16:9 footage) instead of center-cropping landscape footage into portrait. If you change resolution, treat the documented gate values as starting points, not guarantees.
+**Resolution is a validated baseline, not a requirement.** 576×1024 is simply where the taper recipe and the gate values were measured. Match the output aspect ratio to your source instead of center-cropping landscape footage into portrait. For strict 16:9 use **1024×576** (both are multiples of 32; note that `960×544` is *not* exactly 16:9 — 960/544 ≈ 1.765, not 1.778). If you change resolution, treat the documented gate values as starting points, not guarantees.
 
 ## Input roles
 
@@ -29,6 +29,12 @@ H3 lengths must follow the model's `17k + 5` grid. Dimensions must be multiples 
 - **Motion Context external video:** the previous generated delivery's 22-frame tail, injected only in a temporary copy.
 
 Do not make the prompt re-describe every dance move. Let Video 1 own the movement; let the pictures own the identity.
+
+**Source fps must be 24.** The workflow and Motion Context plugin assume 24 fps. Resample 30 fps (or other) sources to 24 fps before slicing, otherwise the output runs slow by `source_fps / 24`. See [field notes §5](GOTCHAS.md).
+
+**`Video 1` is resized by ComfyUI, not by you.** `MiniMaxH3ReferenceToVideo` resizes the source video through an internal `adapt_canvas` (768 short edge, 768×1344 area cap) — for 16:9 footage that is **1344×768** regardless of input size. Pre-scaling the source slice to the output resolution (e.g. 1024×576) avoids wasted decode time and cuts per-segment wall time substantially (see [field notes §7](GOTCHAS.md)).
+
+**The prompt has six fixed sections** (`subject_definitions`, `summary`, `retention_analysis`, `detailed_description`, `overall_soundscape`, `non_diegetic_music`). Shot paragraphs live in `detailed_description` only. If the source has hard cuts, write one `[Shot N] At MM:SS.mmm` per cut, inserted after the previous shot paragraph and before `overall_soundscape` — never appended to the end of the prompt. See [field notes §1–§2](GOTCHAS.md).
 
 ## Per-segment procedure
 

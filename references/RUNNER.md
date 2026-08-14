@@ -14,23 +14,24 @@ For each entry in `segments`:
 4. Patches a copy of the workflow: input filenames, plan seed/length, run name, and separate raw/delivery SaveVideo prefixes.
 5. Submits the workflow to ComfyUI and waits for its native history record.
 6. Archives raw output, trim output, workflow snapshot, submission, history, context files, phase report, and `qa.json` under `run_dir/segments/<name>/`.
-7. Measures phase-screen offsets/NCC, normalized first-frame seam difference, and Laplacian sharpness ratio.
+7. Measures phase-screen offsets/NCC, normalized first-frame seam difference, resolution-matched Laplacian sharpness ratio, and a three-frame RGB source-difference screen for the known `output == source` failure.
 
 It does not perform seed rerolls, visual QA, content selection, output upscaling, audio muxing, or final assembly.
 
 ## Preconditions
 
 - `initial_delivery` is an already generated clean first segment. It must contain at least `context_frames` frames. Use `assets/workflows/t3-ref2va-initial-template.json` to produce it: same resolution, fps, steps, prompt, and identity references as the chain, and review it visually before chaining — continuations inherit its content.
+- `initial_delivery` and every `segments[].source` must be **24 fps**. The runner rejects other frame rates before submitting an expensive job.
 - Every `segments[].source` file is a pre-cut source slice with exactly `raw_frames` frames. Its first `context_frames` must overlap the source time interval that the continuation expects.
 - The workflow must have the configured LoadVideo, plan, raw SaveVideo, and trimmed SaveVideo node IDs. The supplied template defaults are `43`, `101`, `100`, `19`, and `108`.
-- `comfy_input_dir` and `comfy_output_dir` must point to the local or mounted folders used by the same ComfyUI server at `comfy_url`.
+- `comfy_input_dir` and `comfy_output_dir` must point to the local or mounted folders used by the same ComfyUI server at `comfy_url`. **Verify these — ComfyUI is often launched with `--output-directory` (and sometimes `--input-directory`) pointing outside `ComfyUI/`.** The runner only checks that the paths are existing directories; a wrong `comfy_output_dir` fails later as "no local video output found" after a successful generation. Check the ComfyUI launch command or `/object_info` for the real output directory.
 - The compatible H3 Motion Context custom nodes must already be installed on that server.
 
 ## Reference images
 
 Two configuration forms are accepted:
 
-- **Dynamic (recommended):** `"reference_images": ["front.png", "side.png", "back.png", "face.png"]`. The runner locates the workflow's `MiniMaxH3ReferenceToVideo` node, removes its existing reference wiring, creates one `LoadImage` node per image, and wires them as `ref_image_0..N-1`. The node accepts up to 9 images. Prompt tags (`<Picture 1>` …) follow this list order.
+- **Dynamic (recommended):** `"reference_images": ["front.png", "side.png", "back.png", "face.png"]`. The runner locates the workflow's `MiniMaxH3ReferenceToVideo` node, removes its existing reference wiring, creates one `LoadImage` node per image, and wires them as `ref_image_0..N-1`. The node accepts up to 9 images. Prompt tags (`<Picture 1>` …) follow this list order. If the count differs from the template's four images, provide a matching `prompt`; the runner does not rewrite picture references inside prose.
 - **Explicit:** `"reference_images": {"40": "front.png", ...}` maps image paths onto existing `LoadImage` node ids, for workflows whose wiring should stay untouched.
 
 ## Optional source-audio mux
@@ -54,6 +55,7 @@ H3's natively generated audio (`generated_audio` / `source_plus_timeline` chain 
 | `raw_frames` | Frames per generation (default `124`). Must follow H3's `17k+5` grid (90, 107, 124, 141, …) and exceed `context_frames`. Each continuation delivers `raw_frames − context_frames` frames. |
 | `context_frames` | Carried context length (default `22`). The Motion Context plugin only accepts `1/5/22/39`; `22` is the validated value. |
 | `steps` | Sampling steps; omit to keep the template value. |
+| `segments[].noise_seed` | Optional deterministic chroma-noise pattern seed. Defaults to a stable value derived from the segment generation seed. |
 
 ## Numerical gates
 
@@ -64,9 +66,12 @@ All gate fields are optional. Omit one to observe but not halt on that metric.
 | `max_abs_phase_offset` | Largest absolute phase-screen offset across subranges | `2` |
 | `min_phase_ncc` | Lowest phase-screen NCC | `0.3` (collapse detector; see note) |
 | `max_seam_diff` | Brightness-normalized difference between prior delivery tail and new delivery head | `0.04` |
-| `min_sharpness_ratio` | Laplacian variance of delivery divided by matching source region | task-specific; example `0.75` |
+| `min_sharpness_ratio` | Resolution-matched Laplacian variance of delivery divided by matching source region | task-specific; example `0.75` |
+| `min_source_rms_difference` | Mean RGB RMS difference at three aligned frames; screens `output == source` | task-specific; example `8.0` |
 
-A phase screen is a screening metric, not pose certification. Passing all gates is permission to continue automatically, not a declaration that a clip is production-ready.
+A phase screen is a screening metric, not pose certification. `min_source_rms_difference` is also only a screen: similar-looking target/source identities or empty frames can false-halt, while a changed background can hide a failed face replacement. Passing all gates is permission to continue automatically, not a declaration that a clip is production-ready.
+
+> **Gate values are baseline-specific.** The documented defaults were measured on a 576×1024 portrait, 4-image POC. Landscape output, a single reference image, or low-texture (e.g. chibi) subjects shift `min_phase_ncc` and `max_seam_diff` substantially — a real, human-accepted candidate can show `min_phase_ncc` ≈ 0.15 and `seam_diff` ≈ 0.22. Retune or disable gates for non-POC setups rather than trusting the defaults.
 
 > **Note on `min_phase_ncc`:** the motion-energy NCC is noisy on small-figure or low-texture subranges — real candidates that passed human review have shown `0.3–0.5` on one subrange (typically the tail). A strict value like `0.78` will false-halt on genuinely good generations. Treat this gate as a collapse detector, and let `max_abs_phase_offset` carry the phase judgement.
 
@@ -90,7 +95,11 @@ run_dir/segments/<failed>/raw.mp4
 run_dir/segments/<failed>/delivery.mp4
 ```
 
-If the failure is acceptable after dynamic visual review, `--approve-latest` records explicit approval and continues with that delivery as the next context source. If it is not acceptable, reroll or replace that segment explicitly; do not use `--approve-latest` as a magic “ignore QA” button.
+If the failure is acceptable after dynamic visual review, `--approve-latest` records explicit approval both in `STATE.json` and the segment's `qa.json`, then continues with that delivery as the next context source. If it is not acceptable, reroll or replace that segment explicitly; do not use `--approve-latest` as a magic “ignore QA” button.
+
+The runner stores SHA-256 fingerprints of the config and workflow when a run starts. It refuses to resume if either file changes, preventing accidental mixed lineage. Start a new `run_dir` for a changed configuration. State files created by runner version 1 have no fingerprints and must be deliberately migrated or restarted.
+
+> **There is no built-in reroll command.** To reroll a segment, submit the same workflow with a new seed (outside the runner, e.g. a small script that patches `plan_json.shots[0].seed` and the SaveVideo prefixes), archive the result under the segment directory, and continue from the replacement delivery. See [field notes §4](GOTCHAS.md) for the seed-lottery pattern.
 
 ## Example
 

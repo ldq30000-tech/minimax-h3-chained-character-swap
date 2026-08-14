@@ -261,6 +261,5 @@
     "_meta": {
       "title": "Video1 frames only"
     }
-  },
-  "_meta_note": "REMOVE ME: no-context first segment (seg1) template, field-validated 2026-08-14. Replace LoadImage/LoadVideo filenames, node20 width/height/length, node12 seed, node19 prefix before use. Keep graph wiring unchanged."
+  }
 }

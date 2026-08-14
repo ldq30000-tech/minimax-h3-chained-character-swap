@@ -2,10 +2,10 @@
 name: minimax-h3-chained-character-swap
 description: Chain MiniMax H3 Ref2VA character-replacement clips with Motion Context and tapered chroma-noise injection. Use when creating long-form H3 video-to-video character swaps, preserving motion across generated clips, reducing chained sharpness loss, preparing a 22-frame context taper, or auditing temporal phase and seams.
 license: MIT
-compatibility: Requires ComfyUI with MiniMax H3 Ref2VA and a compatible H3 Motion Context node pack, plus Python 3, FFmpeg, and Pillow.
+compatibility: Requires ComfyUI with MiniMax H3 Ref2VA and a compatible H3 Motion Context node pack, plus Python 3.10+, FFmpeg, and Pillow.
 metadata:
   author: MacroSony
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # MiniMax H3 Chained Character Swap
@@ -18,6 +18,7 @@ Use this skill for **slow-to-medium-speed** MiniMax H3 Ref2VA character replacem
 - It is **not** hard temporal control. Do not claim frame-exact source motion from the phase screen alone.
 - Do not use it as the primary continuation method for fast combat or abrupt motion. Use independent blocks, a generated tail-frame anchor, and human dynamic review instead.
 - The injection is applied only to a temporary context input. Never feed an already injected clip into the next generation.
+- The POC baseline assumes one continuous slow/medium shot, 24 fps, and 4 identity images (including a face closeup). Real footage with **hard cuts, close-ups, 30 fps sources, or a single reference image** hits failure modes the baseline does not cover. Read [field notes](references/GOTCHAS.md) before chaining anything that is not an exact copy of the POC setup.
 
 ## Required setup
 
@@ -52,7 +53,7 @@ For every continuation segment after the first:
 5. Generate the raw clip, then trim the repeated 22-frame context region. Only the trimmed delivery enters the final timeline.
 6. Keep source timestamps unique. Do not delete unique frames and fill the duration with duplicates.
 
-See [the full recipe](references/RECIPE.md) and [limitations](references/LIMITATIONS.md).
+See [the full recipe](references/RECIPE.md), [limitations](references/LIMITATIONS.md), and [field notes: hard cuts and gotchas](references/GOTCHAS.md).
 
 ## Guarded automatic loop
 
@@ -65,7 +66,7 @@ cp examples/chain-config.example.json runs/my-chain.json
 python3 scripts/run_chain.py runs/my-chain.json
 ```
 
-For each continuation it extracts the previous **clean** delivery tail, builds an injected temporary context, submits the workflow, archives raw and trimmed outputs, measures phase / seam / sharpness, and writes `run_dir/STATE.json`.
+For each continuation it extracts the previous **clean** delivery tail, builds a deterministic injected temporary context, submits the workflow, archives raw and trimmed outputs, measures phase / seam / sharpness / source difference, and writes `run_dir/STATE.json`.
 
 If any configured numerical gate fails, the process exits with code `2` and changes `STATE.json` to `needs_agent_review`. It does **not** reroll, discard the candidate, or silently continue. Inspect that segment's `qa.json`, source, raw, and delivery; only if an agent deliberately accepts the tradeoff should it resume:
 
@@ -73,7 +74,7 @@ If any configured numerical gate fails, the process exits with code `2` and chan
 python3 scripts/run_chain.py runs/my-chain.json --approve-latest
 ```
 
-`--approve-latest` accepts only the already archived candidate and starts the next segment. To reroll or replace a failed segment, do that explicitly, update the run state/config after review, and retain the failed artifacts.
+`--approve-latest` accepts only the already archived candidate and starts the next segment. To reroll or replace a failed segment, do that explicitly, update the run state/config after review, and retain the failed artifacts. There is no built-in reroll command — see [field notes §4](references/GOTCHAS.md) for the seed-lottery pattern (run several seeds per segment and pick a winner).
 
 ## QA
 
@@ -98,4 +99,5 @@ Seam indices are zero-based positions in the **delivered** timeline. The example
 - [Recipe and workflow wiring](references/RECIPE.md)
 - [Experiment results and measurements](references/EXPERIMENT_RESULTS_CN.md)
 - [Limitations and acceptance rules](references/LIMITATIONS.md)
+- [Field notes: hard cuts, multi-shot prompts, and gotchas](references/GOTCHAS.md)
 - [Upstream dependencies and attribution](references/UPSTREAM_DEPENDENCIES.md)
