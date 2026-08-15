@@ -5,12 +5,17 @@ This repository does **not** include MiniMax H3 weights or Motion Context node c
 ## Required upstream components
 
 - [ComfyUI](https://github.com/Comfy-Org/ComfyUI) with native MiniMax H3 / Ref2VA support.
-- A compatible H3 Motion Context implementation that provides nodes equivalent to the workflow's `MiniMaxH3Chain*` and trim nodes.
+- [ethanfel/ComfyUI-MiniMaxH3-Contex-Loop](https://github.com/ethanfel/ComfyUI-MiniMaxH3-Contex-Loop)
+  — provides the `MiniMaxH3ChainPlan`, `MiniMaxH3ChainExternalVideo`,
+  `MiniMaxH3ChainLoopStart`, `MiniMaxH3ChainCurrent`, `MiniMaxH3ChainContext`,
+  and `MiniMaxH3LoopTrim` nodes used by the reference workflow.
 
-The reference workflow was built with the Motion Context ecosystem originating from:
+## Prior work / optional coexistence
 
 - [NikoDemon80/ComfyUI-H3-Motion-Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context)
-- [ethanfel/ComfyUI-MiniMaxH3-Contex-Loop](https://github.com/ethanfel/ComfyUI-MiniMaxH3-Contex-Loop)
+  — original Motion Context implementation. It does **not** provide the
+  `MiniMaxH3Chain*` nodes used by this workflow; it can be installed alongside
+  ethanfel's pack, but is not required for this skill.
 
 These projects are GPL-3.0 and have their own installation instructions, licensing, and compatibility constraints. This repository only supplies an external workflow configuration and independent helper scripts; it does not redistribute or modify their code.
 
