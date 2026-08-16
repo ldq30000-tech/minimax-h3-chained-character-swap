@@ -15,6 +15,9 @@ from .nodes import (
     H3NativeLongVideoPrepare,
     H3NativeLongVideoScene,
 )
+from .server_routes import register_routes
+
+register_routes()
 
 
 NODE_CLASS_MAPPINGS = {
@@ -48,3 +51,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "H3FullVideoOneClick": "H3 Full Video One Click",
     "H3FullVideoStatus": "H3 Full Video Status",
 }
+
+WEB_DIRECTORY = "./web"
+
+__all__ = [
+    "NODE_CLASS_MAPPINGS",
+    "NODE_DISPLAY_NAME_MAPPINGS",
+    "WEB_DIRECTORY",
+]

@@ -1,4 +1,4 @@
-"""Create stable and experimental release workflows from a ComfyUI canvas."""
+"""Create portable release workflows from user-authored ComfyUI canvases."""
 
 from __future__ import annotations
 
@@ -19,6 +19,23 @@ INPUT_NAMES = {
 TURBO_NODE_ID = 1972
 SAGE_NODE_ID = 1970
 ATTENTION_NODE_ID = 1941
+
+USER_PROFILES = {
+    "normal": {
+        "variant": "user-no-audio-compatible-124f",
+        "frame_cap": 124,
+        "scene_lengths": [124, 124, 124, 124, 124, 107],
+        "run_suffix": "user_no_audio_124f",
+        "label": "124-FRAME USER PROFILE",
+    },
+    "low-vram": {
+        "variant": "user-no-audio-compatible-low-vram-107f",
+        "frame_cap": 107,
+        "scene_lengths": [107, 107, 107, 107, 107, 107, 107],
+        "run_suffix": "user_no_audio_low_vram_107f",
+        "label": "107-FRAME LOW-VRAM USER PROFILE",
+    },
+}
 
 
 def _node(workflow: dict[str, Any], node_id: int) -> dict[str, Any]:
@@ -215,6 +232,119 @@ def _experimental_variant(source: dict[str, Any]) -> dict[str, Any]:
     return workflow
 
 
+def _user_profile_variant(
+    source: dict[str, Any], profile_name: str
+) -> dict[str, Any]:
+    """Make a portable copy while preserving the user's active model route."""
+    try:
+        profile = USER_PROFILES[profile_name]
+    except KeyError as exc:
+        raise ValueError(f"unknown user profile {profile_name!r}") from exc
+
+    workflow = copy.deepcopy(source)
+    for node_id, filename in INPUT_NAMES.items():
+        values = list(_node(workflow, node_id).get("widgets_values") or [])
+        if not values:
+            raise ValueError(f"input node {node_id} has no filename widget")
+        values[0] = filename
+        _node(workflow, node_id)["widgets_values"] = values
+
+    prepare = _node(workflow, 1960)
+    prepare_values = list(prepare.get("widgets_values") or [])
+    frame_cap = int(profile["frame_cap"])
+    if len(prepare_values) < 5 or int(prepare_values[1]) != frame_cap:
+        raise ValueError(
+            f"{profile_name} source must use a {frame_cap}-frame prepare cap"
+        )
+    prompt = str(prepare_values[0])
+    base_seed = int(prepare_values[4])
+
+    plan_node = _node(workflow, 1700)
+    plan_values = list(plan_node.get("widgets_values") or [])
+    if len(plan_values) < 2:
+        raise ValueError("plan node 1700 is missing its run-name widget")
+    plan_values[0] = json.dumps(
+        {
+            "defaults": {"steps": int(prepare_values[3])},
+            "shots": [
+                {
+                    "id": f"source_{index:02d}",
+                    "prompt": prompt,
+                    "length": int(length),
+                    "seed": str(base_seed + index - 1),
+                }
+                for index, length in enumerate(profile["scene_lengths"], start=1)
+            ],
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    suffix = str(profile["run_suffix"])
+    plan_values[1] = f"h3_native_loop_{suffix}"
+    plan_node["widgets_values"] = plan_values
+    plan_node["title"] = f"AUTO PLAN - DYNAMIC SOURCE COUNT / {profile['label']}"
+
+    ref2va_values = list(_node(workflow, 110).get("widgets_values") or [])
+    if len(ref2va_values) > 3:
+        ref2va_values[3] = frame_cap
+        _node(workflow, 110)["widgets_values"] = ref2va_values
+
+    _node(workflow, 1950)["title"] = "INPUT ORIGINAL LONG VIDEO - AUDIO OPTIONAL"
+    prepare["title"] = (
+        f"STREAM METADATA + AUTO PLAN + AUDIO FALLBACK - {profile['label']}"
+    )
+    _node(workflow, 1706)["widgets_values"][1] = (
+        f"character_swap_assembled_{suffix}"
+    )
+    _node(workflow, 1708)["widgets_values"][1] = (
+        f"character_swap_recovered_{suffix}"
+    )
+    final = _node(workflow, 1961)
+    final["title"] = (
+        "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK"
+    )
+    final["widgets_values"][0] = f"character_swap_full_exact_{suffix}"
+
+    turbo = _node(workflow, TURBO_NODE_ID)
+    if int(turbo.get("mode", 0)) != 0:
+        raise ValueError("user profile requires active LightX2V LoRA node 1972")
+    turbo["title"] = "ENABLED - LightX2V Turbo LoRA / 20-step user profile"
+    connected_links = [
+        link
+        for link in workflow["links"]
+        if int(link[1]) == TURBO_NODE_ID or int(link[3]) == TURBO_NODE_ID
+    ]
+    if not any(int(link[3]) == TURBO_NODE_ID for link in connected_links) or not any(
+        int(link[1]) == TURBO_NODE_ID for link in connected_links
+    ):
+        raise ValueError("user profile requires node 1972 to stay connected")
+
+    for group in workflow.get("groups", []):
+        if int(group["id"]) == 1:
+            group["title"] = (
+                "H3 MODEL STACK - LIGHTX2V TURBO LORA ENABLED / "
+                "20-STEP USER PROFILE"
+            )
+        elif int(group["id"]) == 5:
+            group["title"] = "PLAN EDITOR - DYNAMIC JSON OVERRIDES EXAMPLE"
+
+    workflow.setdefault("extra", {})["release"] = {
+        "input_media_included": False,
+        "model_weights_included": False,
+        "source_workflow": "user-modified final canvas",
+        "variant": profile["variant"],
+        "scene_frame_cap": frame_cap,
+        "missing_audio": "same-duration 44.1 kHz mono silence fallback",
+        "source_loading": "streamed current-scene windows",
+        "final_preview": "playable video and saved path on canvas",
+        "turbo_lora": "enabled and connected user profile",
+        "turbo_lora_model": str(turbo["widgets_values"][0]),
+        "sampling": "res_multistep / beta / 20 steps",
+    }
+    _rebuild_link_fields(workflow)
+    return workflow
+
+
 def _write(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -226,9 +356,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("stable_output", type=Path)
-    parser.add_argument("experimental_output", type=Path)
+    parser.add_argument("experimental_output", type=Path, nargs="?")
+    parser.add_argument(
+        "--user-profile",
+        choices=sorted(USER_PROFILES),
+        help="write one portable user profile to stable_output",
+    )
     args = parser.parse_args()
     source = json.loads(args.source.read_text(encoding="utf-8"))
+    if args.user_profile:
+        if args.experimental_output is not None:
+            parser.error("experimental_output is not used with --user-profile")
+        _write(
+            args.stable_output,
+            _user_profile_variant(source, args.user_profile),
+        )
+        print(args.stable_output.resolve())
+        return 0
+    if args.experimental_output is None:
+        parser.error("experimental_output is required unless --user-profile is used")
     _write(args.stable_output, _stable_variant(source))
     _write(args.experimental_output, _experimental_variant(source))
     print(args.stable_output.resolve())

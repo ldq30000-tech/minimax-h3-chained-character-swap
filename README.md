@@ -88,11 +88,24 @@ long at 24 fps, for example:
 ]
 ```
 
-## Low-VRAM full source-video loop
+## Full source-video loop
 
-For the final visible native recursive canvas, import
-`assets/workflows/h3-native-loop-final-stable-ui.json`. It automatically counts
-and segments a complete source video without holding the complete decoded frame
+Two portable copies of the user's current final canvas are included:
+
+- `h3-native-loop-user-final-no-audio-compatible-ui.json` keeps the 124-frame
+  cap, missing-audio fallback, active LightX2V LoRA route, and 20-step profile.
+- `h3-native-loop-user-final-no-audio-compatible-low-vram-ui.json` keeps the
+  same route but lowers the cap to 107 frames and uses a seven-scene 107-frame
+  placeholder plan.
+
+These user profiles preserve a locally tested configuration; they are not a
+general compatibility claim for every H3 base, LoRA revision, or GPU. For the
+conservative release canvas, import
+`assets/workflows/h3-native-loop-final-stable-ui.json`, which keeps Turbo LoRAs
+disabled and disconnected.
+
+All three final canvases automatically count
+and segment a complete source video without holding the complete decoded frame
 batch in RAM. The 12 GB stable profile caps each recursive pass at 107 frames
 (about 4.46 seconds at 24 fps). When the source length does not divide cleanly,
 inference-only tail padding rebalances the plan instead of folding a tail into
@@ -102,9 +115,11 @@ checkpoints each clean segment, assembles the chain, trims inference-only tail
 padding, and restores the original source soundtrack. If the source has no
 decodable audio track, it supplies same-duration 44.1 kHz mono silence instead
 of aborting. The final exact-trim node shows the playable delivered video and its
-saved path directly on the canvas. The Stable graph keeps
-ReservedVRAM and the KJNodes memory-efficient SageAttention patch but leaves all
-Turbo LoRAs disabled and disconnected from the pruned INT8 base.
+saved path directly on the canvas. Installing this repository as a ComfyUI
+custom node also lets that preview restore the latest matching final MP4 after a
+ComfyUI restart. The Stable graph keeps ReservedVRAM and the KJNodes
+memory-efficient SageAttention patch but leaves all Turbo LoRAs disabled and
+disconnected from the pruned INT8 base.
 
 The 12 GB label identifies the tested low-VRAM target profile; it is not a
 minimum-VRAM or runtime guarantee. Actual speed still depends on offload policy,
@@ -228,6 +243,7 @@ minimax_h3_ref2va_pruned_int8_convrot.safetensors
 qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
 minimax_h3_video_vae_fp16.safetensors
 minimax_h3_audio_vae_fp32.safetensors
+minimax_h3_ref2v_lightx2v_turbo_4step_v0.1_resized_avg_rank_20_bf16.safetensors
 ```
 
 See [upstream dependencies and licensing](references/UPSTREAM_DEPENDENCIES.md) before use.
