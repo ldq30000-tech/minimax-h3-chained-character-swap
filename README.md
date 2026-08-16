@@ -21,7 +21,7 @@ GitHub Release only.
 ## Demo videos
 
 - [Generated result (25.01 s, 1440x2560, 60 fps)](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/generated-character-swap-result.mp4)
-- [Template/reference video (6.94 s, 720x1280, 30 fps)](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/template-reference-video.mp4)
+- [Template/reference video (25.61 s, 720x1280, 30 fps)](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/template-reference-video.mp4)
 
 These illustrate workflow input and output, but they have different durations and
 are not an equal-length, frame-by-frame before/after pair. Release media is not
