@@ -94,7 +94,10 @@ For the final visible native recursive canvas, import
 `assets/workflows/h3-native-loop-final-stable-ui.json`. It automatically counts
 and segments a complete source video, keeps every expensive H3 node visible,
 checkpoints each clean segment, assembles the chain, trims inference-only tail
-padding, and restores the original source soundtrack. The Stable graph keeps
+padding, and restores the original source soundtrack. If the source has no
+decodable audio track, it supplies same-duration 44.1 kHz mono silence instead
+of aborting. The final exact-trim node shows the playable delivered video and its
+saved path directly on the canvas. The Stable graph keeps
 ReservedVRAM and the KJNodes memory-efficient SageAttention patch but leaves all
 Turbo LoRAs disabled and disconnected from the pruned INT8 base.
 
@@ -139,7 +142,8 @@ The full-video runner automatically:
 5. chains later segments from the previous clean delivery's 22-frame tail;
 6. trims duplicated context and final inference padding;
 7. concatenates exactly the normalized source frame count; and
-8. muxes the original source audio into `run_dir/final/final.mp4`.
+8. muxes the original source audio into `run_dir/final/final.mp4`, or uses
+   same-duration silence when the source has no decodable audio track.
 
 Final-segment QA excludes inference-only duplicate padding. Sharpness compares
 only the real delivered frame range. If that range is too short to provide four

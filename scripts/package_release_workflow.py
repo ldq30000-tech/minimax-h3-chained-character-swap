@@ -72,6 +72,8 @@ def _genericize(workflow: dict[str, Any]) -> None:
         _node(workflow, node_id)["widgets_values"] = values
 
     prepare = _node(workflow, 1960)
+    _node(workflow, 1950)["title"] = "INPUT ORIGINAL LONG VIDEO - AUDIO OPTIONAL"
+    prepare["title"] = "AUTO 24 FPS + PLAN + PAD + SILENCE FALLBACK"
     prompt = str(prepare["widgets_values"][0])
     raw_lengths = [124, 124, 124, 124, 124, 107]
     placeholder_plan = {
@@ -114,20 +116,23 @@ def _genericize(workflow: dict[str, Any]) -> None:
         256,
     ]
     final = _node(workflow, 1961)
-    final["title"] = "FINAL EXACT SOURCE-FRAME TRIM + ORIGINAL SOURCE AUDIO"
+    final["title"] = (
+        "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK"
+    )
     final["widgets_values"] = ["character_swap_full_exact", 24.0, 256]
 
     note_text = {
         1932: (
             "Queue once. Loop End recursively clones the visible sampling body "
             "for every auto-planned scene. The green Exact Trim node is the "
-            "actual source-length delivery with the original audio."
+            "actual source-length delivery with original audio or silence fallback."
         ),
         1968: (
             "The source is decoded once, resampled to 24 fps, and counted on "
             "the canvas. H3-valid segment lengths and inference-only tail "
             "padding are computed automatically. Final Exact Trim removes "
-            "inference-only frames and restores the original source audio."
+            "inference-only frames and restores original source audio, or "
+            "same-duration silence when no decodable audio track exists."
         ),
     }
     for node_id, text in note_text.items():
@@ -144,6 +149,7 @@ def _genericize(workflow: dict[str, Any]) -> None:
         "input_media_included": False,
         "model_weights_included": False,
         "source_workflow": "user final canvas",
+        "missing_audio": "same-duration 44.1 kHz mono silence fallback",
     }
 
 

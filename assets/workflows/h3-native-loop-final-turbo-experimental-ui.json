@@ -1664,7 +1664,7 @@
         "Node name for S&R": "Note"
       },
       "widgets_values": [
-        "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The green Exact Trim node is the actual source-length delivery with the original audio."
+        "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The green Exact Trim node is the actual source-length delivery with original audio or silence fallback."
       ],
       "color": "#432f66",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -2410,7 +2410,7 @@
           ]
         }
       ],
-      "title": "INPUT ORIGINAL LONG VIDEO + ORIGINAL AUDIO",
+      "title": "INPUT ORIGINAL LONG VIDEO - AUDIO OPTIONAL",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.33.1",
@@ -2502,7 +2502,7 @@
           "links": null
         }
       ],
-      "title": "AUTO 24 FPS + FRAME COUNT + SEGMENT PLAN + INFERENCE-ONLY PAD",
+      "title": "AUTO 24 FPS + PLAN + PAD + SILENCE FALLBACK",
       "properties": {
         "aux_id": "MacroSony/minimax-h3-chained-character-swap",
         "ver": "5001f5570d64700db66f9a5fc7eeea54a9790bec",
@@ -2706,7 +2706,7 @@
           "links": null
         }
       ],
-      "title": "FINAL EXACT SOURCE-FRAME TRIM + ORIGINAL SOURCE AUDIO",
+      "title": "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK",
       "properties": {
         "aux_id": "MacroSony/minimax-h3-chained-character-swap",
         "ver": "5001f5570d64700db66f9a5fc7eeea54a9790bec",
@@ -2782,7 +2782,7 @@
         "Node name for S&R": "Note"
       },
       "widgets_values": [
-        "The source is decoded once, resampled to 24 fps, and counted on the canvas. H3-valid segment lengths and inference-only tail padding are computed automatically. Final Exact Trim removes inference-only frames and restores the original source audio."
+        "The source is decoded once, resampled to 24 fps, and counted on the canvas. H3-valid segment lengths and inference-only tail padding are computed automatically. Final Exact Trim removes inference-only frames and restores original source audio, or same-duration silence when no decodable audio track exists."
       ],
       "color": "#2d4b58",
       "bgcolor": "rgba(24,24,27,.92)"
@@ -3809,6 +3809,7 @@
       "input_media_included": false,
       "model_weights_included": false,
       "source_workflow": "user final canvas",
+      "missing_audio": "same-duration 44.1 kHz mono silence fallback",
       "variant": "turbo-experimental",
       "warning": "The enabled Turbo route is incompatible with the default pruned_int8_convrot base and is not the supported default."
     }

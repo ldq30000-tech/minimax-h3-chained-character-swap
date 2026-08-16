@@ -275,7 +275,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
             "mode": 0,
             "inputs": [],
             "outputs": [{"name": "VIDEO", "type": "VIDEO", "links": None}],
-            "title": "INPUT ORIGINAL LONG VIDEO + ORIGINAL AUDIO",
+            "title": "INPUT ORIGINAL LONG VIDEO - AUDIO OPTIONAL",
             "properties": {"Node name for S&R": "LoadVideo"},
             "widgets_values": [source_name, "image"],
         },
@@ -298,7 +298,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
                 {"name": "segment_count", "type": "INT", "links": None},
                 {"name": "status", "type": "STRING", "links": None},
             ],
-            "title": "AUTO 24 FPS + FRAME COUNT + SEGMENT PLAN + INFERENCE-ONLY PAD",
+            "title": "AUTO 24 FPS + PLAN + PAD + SILENCE FALLBACK",
             "properties": {"Node name for S&R": "H3NativeLongVideoPrepare"},
             "widgets_values": [PROMPT, 124, 22, 20, 730000],
             "color": "#215c55",
@@ -370,7 +370,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
                 {"name": "final_video", "type": "STRING", "links": None},
                 {"name": "status", "type": "STRING", "links": None},
             ],
-            "title": "FINAL EXACT 614-FRAME TRIM + ORIGINAL SOURCE AUDIO",
+            "title": "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK",
             "properties": {"Node name for S&R": "H3FinalTrimToSource"},
             "widgets_values": ["character_swap_full_exact_614f", 24.0, 256],
             "color": "#24533a",
@@ -397,7 +397,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
             [-3008, 1480],
             [1472, 320],
             "DYNAMIC SOURCE PLAN",
-            "The source is decoded once, resampled to 24 fps, and counted on the canvas. For the selected 25.6s source: 614 unique frames become 617 inference frames; only three cloned tail frames exist inside Ref2VA input. The recursive plan is 124,124,124,124,124,107 raw frames. Final Exact Trim removes those three inference-only frames and restores the original source audio.",
+            "The source is decoded once, resampled to 24 fps, and counted on the canvas. For the selected 25.6s source: 614 unique frames become 617 inference frames; only three cloned tail frames exist inside Ref2VA input. The recursive plan is 124,124,124,124,124,107 raw frames. Final Exact Trim removes those three inference-only frames and restores the original source audio, or same-duration silence when no audio track exists.",
         ),
         _note(
             1969,
@@ -434,9 +434,9 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     _connect(workflow, 1960, 4, 1961, "source_frame_count", "INT")
 
     for note_id, title, text in [
-        (1902, "CHARACTER REPLACEMENT INPUTS", "Four identity images own the replacement character. The source video owns motion, timing, camera, environment, cuts, and the final soundtrack."),
+        (1902, "CHARACTER REPLACEMENT INPUTS", "Four identity images own the replacement character. The source video owns motion, timing, camera, environment, cuts, and the final soundtrack. Missing source audio is replaced with same-duration silence."),
         (1906, "NATIVE RECURSIVE LONG-VIDEO LOOP", "Plan -> Loop Start -> Current -> Tagged Ref2VA -> Motion Context -> Sampler -> Trim -> Segment Save -> Review -> Loop End -> Assemble -> Exact Trim. All expensive generation nodes are visible on this canvas."),
-        (1932, "QUEUE BEHAVIOR", "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The first assembled path is 617 inference frames; the green Exact Trim node is the actual 614-frame delivery with original audio."),
+        (1932, "QUEUE BEHAVIOR", "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The first assembled path is 617 inference frames; the green Exact Trim node is the actual 614-frame delivery with original audio or silence fallback."),
     ]:
         node = _node(workflow, note_id)
         node["title"] = title

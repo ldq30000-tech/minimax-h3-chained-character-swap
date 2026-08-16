@@ -215,6 +215,22 @@ def _audio_waveform(audio: Any, label: str) -> tuple[Any, int]:
     return waveform, int(sample_rate)
 
 
+def _video_preview_item(path: Path) -> dict[str, str] | None:
+    """Build a ComfyUI video preview item for files inside the output root."""
+    if folder_paths is None:
+        return None
+    output_root = Path(folder_paths.get_output_directory()).resolve()
+    try:
+        relative = path.resolve().relative_to(output_root)
+    except ValueError:
+        return None
+    return {
+        "filename": relative.name,
+        "subfolder": relative.parent.as_posix() if relative.parent != Path(".") else "",
+        "type": "output",
+    }
+
+
 class H3NativeLongVideoPrepare:
     """Normalize one native video and build the visible recursive scene plan."""
 
@@ -293,7 +309,22 @@ class H3NativeLongVideoPrepare:
                 [normalized, normalized[-1:].repeat((padding, 1, 1, 1))], dim=0
             )
 
-        waveform, sample_rate = _audio_waveform(source_audio, "source video audio")
+        if source_audio is None:
+            sample_rate = 44100
+            source_samples = max(
+                1, int(round(source_frame_count / 24.0 * sample_rate))
+            )
+            source_waveform = torch.zeros(
+                (1, 1, source_samples), dtype=torch.float32
+            )
+            audio_status = "audio=missing -> 44.1 kHz mono silence"
+        else:
+            source_waveform, sample_rate = _audio_waveform(
+                source_audio, "source video audio"
+            )
+            audio_status = f"audio=source {sample_rate} Hz"
+
+        waveform = source_waveform
         required_samples = int(round(inference_frame_count / 24.0 * sample_rate))
         available_samples = int(waveform.shape[-1])
         if available_samples < required_samples:
@@ -302,14 +333,16 @@ class H3NativeLongVideoPrepare:
             waveform = waveform[..., :required_samples]
         inference_audio = {"waveform": waveform.clone(), "sample_rate": sample_rate}
         original_audio = {
-            "waveform": _audio_waveform(source_audio, "source video audio")[0].clone(),
+            "waveform": source_waveform.clone(),
             "sample_rate": sample_rate,
+            "h3_audio_source": "silence_fallback" if source_audio is None else "source",
         }
         lengths = [shot["length"] for shot in plan["shots"]]
         status = (
             f"{int(frames.shape[0])} frames at {source_fps:.6g} fps -> "
             f"{source_frame_count} unique frames at 24 fps; scenes={lengths}; "
-            f"inference={inference_frame_count} frames; end padding={padding} frames"
+            f"inference={inference_frame_count} frames; end padding={padding} frames; "
+            f"{audio_status}"
         )
         return (
             normalized,
@@ -357,7 +390,7 @@ class H3FinalTrimToSource:
         filename: str,
         fps: float,
         audio_bitrate: int,
-    ) -> tuple[str, str]:
+    ) -> Any:
         source = _require_file(video_path, "assembled H3 video")
         if source_frame_count < 1 or not math.isfinite(float(fps)) or fps <= 0:
             raise H3ChainNodeError("source_frame_count and fps must be positive")
@@ -427,11 +460,23 @@ class H3FinalTrimToSource:
                 detail = completed.stderr.strip() or completed.stdout.strip() or "unknown ffmpeg error"
                 raise H3ChainNodeError(f"final exact trim failed: {detail}")
         temporary_output.replace(destination)
+        audio_label = (
+            "silence fallback"
+            if source_audio.get("h3_audio_source") == "silence_fallback"
+            else "original audio"
+        )
         status = (
             f"trimmed to {source_frame_count} frames at {fps:.6g} fps "
-            f"({duration:.3f}s) and muxed original {sample_rate} Hz audio"
+            f"({duration:.3f}s) and muxed {sample_rate} Hz {audio_label}"
         )
-        return str(destination.resolve()), status
+        result = (str(destination.resolve()), status)
+        preview = _video_preview_item(destination)
+        if preview is None:
+            return result
+        return {
+            "ui": {"text": [status], "videos": [preview]},
+            "result": result,
+        }
 
 
 def _uploaded_files(content_type: str) -> list[str]:

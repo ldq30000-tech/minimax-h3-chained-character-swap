@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 from pathlib import Path
 
@@ -118,6 +119,54 @@ class ComfyNodeTests(unittest.TestCase):
         self.assertTrue(all((length - 5) % 17 == 0 for length in lengths))
         delivered = lengths[0] + sum(length - 22 for length in lengths[1:])
         self.assertEqual(delivered, 532 + padding)
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "requires PyTorch")
+    def test_native_loop_synthesizes_silence_when_source_has_no_audio(self) -> None:
+        import torch
+
+        source_video = mock.Mock()
+        source_video.get_components.return_value = SimpleNamespace(
+            images=torch.ones((30, 2, 2, 3), dtype=torch.float32),
+            audio=None,
+            frame_rate=30.0,
+        )
+
+        result = nodes.H3NativeLongVideoPrepare().prepare(
+            source_video=source_video,
+            prompt="subject_definitions:\n@motion owns motion.",
+            raw_frames=90,
+            context_frames=22,
+            steps=20,
+            base_seed=730000,
+        )
+
+        frames, inference_audio, source_audio = result[:3]
+        source_frame_count, inference_frame_count = result[4:6]
+        self.assertEqual((source_frame_count, inference_frame_count), (24, 39))
+        self.assertEqual(tuple(frames.shape), (39, 2, 2, 3))
+        self.assertEqual(source_audio["sample_rate"], 44100)
+        self.assertEqual(source_audio["waveform"].shape[-1], 44100)
+        self.assertEqual(source_audio["h3_audio_source"], "silence_fallback")
+        self.assertEqual(inference_audio["waveform"].shape[-1], 71662)
+        self.assertEqual(torch.count_nonzero(source_audio["waveform"]).item(), 0)
+        self.assertIn("audio=missing -> 44.1 kHz mono silence", result[7])
+
+    def test_final_video_preview_uses_comfy_output_relative_path(self) -> None:
+        final = self.output_dir / "h3_chains" / "run" / "final" / "result.mp4"
+        final.parent.mkdir(parents=True)
+        final.touch()
+        fake_folder_paths = mock.Mock()
+        fake_folder_paths.get_output_directory.return_value = str(self.output_dir)
+        with mock.patch.object(nodes, "folder_paths", fake_folder_paths):
+            preview = nodes._video_preview_item(final)
+        self.assertEqual(
+            preview,
+            {
+                "filename": "result.mp4",
+                "subfolder": "h3_chains/run/final",
+                "type": "output",
+            },
+        )
 
     def test_full_video_inputs_builds_absolute_media_payload(self) -> None:
         source, references_json = nodes.H3FullVideoInputs().build(

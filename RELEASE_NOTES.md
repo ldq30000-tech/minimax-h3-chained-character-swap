@@ -20,7 +20,10 @@ non-pruned base and the LoRA's documented sampling schedule.
 - Every continuation uses the previous clean delivery as Motion Context lineage.
 - All segments are checkpointed and may be recovered without rerendering.
 - The final MP4 is trimmed to the exact normalized source frame count and receives
-  the original source soundtrack.
+  the original source soundtrack. Sources without a decodable audio track receive
+  same-duration 44.1 kHz mono silence instead of failing preparation.
+- The final exact-trim output publishes a playable video preview and its saved path
+  directly on the workflow canvas.
 - `res_multistep`, `beta`, 20 steps, and denoise 1.0 are the stable defaults.
 
 The local integration run used 614 source frames at 576x1024 and produced a
