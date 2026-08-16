@@ -2,6 +2,8 @@
 
 A portable [Agent Skill](https://agentskills.io) for chaining MiniMax H3 Ref2VA character-replacement clips with **Motion Context** and a **tapered chroma-noise context injection**.
 
+[中文最终版说明](README_CN.md) | [Final release notes](RELEASE_NOTES.md) | [Third-party notices](THIRD_PARTY_NOTICES.md)
+
 > Experimental workflow, not a claim of hard frame-by-frame temporal control. It is intended for slow-to-medium-speed motion. Fast combat, abrupt direction changes, and strict source-faithful choreography still need separate handling and human review.
 
 ## What this contains
@@ -41,6 +43,103 @@ python3 scripts/run_chain.py runs/my-chain.json
 
 After human/agent inspection of a halted candidate, an explicit `--approve-latest` continues from that exact archived delivery. Details: [references/RUNNER.md](references/RUNNER.md).
 
+## One-click ComfyUI entry
+
+This repository can also be installed directly as a ComfyUI custom node. Clone
+the whole repository into `ComfyUI/custom_nodes/minimax-h3-chained-character-swap`,
+then restart ComfyUI. It exposes three nodes under **H3 Chain**:
+
+- **H3 Chain Config** validates the source slices, references, paths, H3 frame
+  settings, gates, and template node ids, then writes an immutable config in
+  `run_dir`.
+- **H3 Chain Launch** starts the guarded runner as a separate controller
+  process. It returns immediately so the active ComfyUI queue worker can finish;
+  the controller then submits each continuation back through the native API.
+- **H3 Chain Status** reads `STATE.json` without mutating it.
+
+Connect Config's `config_path` output to Launch. Use `start` after a manually
+generated and reviewed first delivery. When Status reports `needs_agent_review`,
+inspect the archived output and choose Launch's `approve_latest` action only to
+explicitly accept that exact candidate. The node never auto-approves failures,
+rerolls, or feeds an injected temporary context into a later segment.
+
+An API-format starter graph is available at
+`assets/workflows/h3-chain-controller-template.json`. Replace every absolute
+path before queueing it. `reference_images_json` accepts either an ordered list
+of image paths or a map of existing `LoadImage` node ids to paths.
+`segments_json` is an ordered list of source slices, each exactly `raw_frames`
+long at 24 fps, for example:
+
+```json
+[
+  {"name": "seg02", "seed": 730002, "source": "D:/project/source_seg02_124f.mp4"},
+  {"name": "seg03", "seed": 730003, "source": "D:/project/source_seg03_124f.mp4"}
+]
+```
+
+## Full source-video loop
+
+For the final visible native recursive canvas, import
+`assets/workflows/h3-native-loop-final-stable-ui.json`. It automatically counts
+and segments a complete source video, keeps every expensive H3 node visible,
+checkpoints each clean segment, assembles the chain, trims inference-only tail
+padding, and restores the original source soundtrack. The Stable graph keeps
+ReservedVRAM and the KJNodes memory-efficient SageAttention patch but leaves all
+Turbo LoRAs disabled and disconnected from the pruned INT8 base.
+
+The neighboring `h3-native-loop-final-turbo-experimental-ui.json` preserves the
+enabled Turbo route from the supplied final canvas for inspection only. It is
+not compatible with the default `pruned_int8_convrot` base and requires a
+compatible non-pruned model plus the LoRA's documented schedule.
+
+`assets/workflows/h3-full-video-controller-ui.json` is the standard ComfyUI UI
+workflow to import for a complete source video. The neighboring
+`h3-full-video-controller-template.json` is its API-format equivalent. They use
+**H3 Full Video Inputs**, **H3 Full Video Config**, **H3 Full Video Launch**,
+and **H3 Full Video Status**. The Inputs node provides native ComfyUI
+upload/select widgets for one source video plus front, side, back, and face
+closeup identity images; it passes resolved input paths to the controller.
+The controller follows the same useful state/collect/finalize pattern as a
+MieLoop graph while submitting the expensive H3 jobs only after the launching
+graph has released ComfyUI's queue worker.
+
+For a single-node import, use
+`assets/workflows/h3-full-video-one-click-ui.json`. **H3 Full Video One Click**
+keeps the media upload widgets and stable controller settings in one node; the
+initial and continuation API workflows remain internal implementation details
+and do not need to be loaded manually.
+
+For troubleshooting on one canvas, use
+`assets/workflows/h3-full-video-diagnostic-all-in-one-ui.json`. It keeps the
+media inputs, full-video configuration, non-blocking launcher, live stage/error
+diagnostics, and a readable stage map together. Both generation API workflows
+are embedded in the workflow metadata, so the imported graph does not depend on
+separate JSON paths. The visible MiniMax H3 Turbo LoRA slots are deliberately
+disabled: the bundled pruned Ref2VA base has incompatible AdaLN dimensions.
+Enable and wire those slots only after replacing it with a compatible
+non-pruned MiniMax H3 base, and change sampling to the LoRA's documented steps.
+
+The full-video runner automatically:
+
+1. resamples and letterboxes the source to 24 fps and the requested dimensions;
+2. computes `1 + ceil(max(0, total_frames - raw_frames) / (raw_frames - context_frames))`;
+3. creates overlapping source slices and inference-only padding for the final slice;
+4. generates the first segment with the no-context template;
+5. chains later segments from the previous clean delivery's 22-frame tail;
+6. trims duplicated context and final inference padding;
+7. concatenates exactly the normalized source frame count; and
+8. muxes the original source audio into `run_dir/final/final.mp4`.
+
+Final-segment QA excludes inference-only duplicate padding. Sharpness compares
+only the real delivered frame range. If that range is too short to provide four
+motion transitions per configured phase subrange, `qa.json` records
+`phase_skipped` and its reason, and phase gates are skipped for that segment.
+
+Set a new `run_dir` when changing any input or setting. A numerical QA failure
+changes `STATE.json` to `needs_agent_review`; inspect the archived segment and
+queue **H3 Full Video Launch** with `approve_latest` only to deliberately accept
+that exact candidate.
+
 ## Install as a skill
 
 Clone this repository, then expose the repository folder as a skill directory.
@@ -49,7 +148,7 @@ Clone this repository, then expose the repository folder as a skill directory.
 
 ```bash
 mkdir -p .pi/skills
-git clone https://github.com/MacroSony/minimax-h3-chained-character-swap.git \
+git clone https://github.com/ldq30000-tech/minimax-h3-chained-character-swap.git \
   .pi/skills/minimax-h3-chained-character-swap
 ```
 
@@ -57,7 +156,7 @@ git clone https://github.com/MacroSony/minimax-h3-chained-character-swap.git \
 
 ```bash
 mkdir -p .agents/skills
-git clone https://github.com/MacroSony/minimax-h3-chained-character-swap.git \
+git clone https://github.com/ldq30000-tech/minimax-h3-chained-character-swap.git \
   .agents/skills/minimax-h3-chained-character-swap
 ```
 
@@ -65,7 +164,7 @@ git clone https://github.com/MacroSony/minimax-h3-chained-character-swap.git \
 
 ```bash
 mkdir -p ~/.pi/agent/skills
-git clone https://github.com/MacroSony/minimax-h3-chained-character-swap.git \
+git clone https://github.com/ldq30000-tech/minimax-h3-chained-character-swap.git \
   ~/.pi/agent/skills/minimax-h3-chained-character-swap
 ```
 

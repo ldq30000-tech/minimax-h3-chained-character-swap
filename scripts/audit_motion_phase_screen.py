@@ -100,6 +100,11 @@ def main() -> None:
     parser.add_argument("source")
     parser.add_argument("--start", type=int, default=0, help="first generated frame to evaluate")
     parser.add_argument("--end", type=int, required=True, help="exclusive generated frame end")
+    parser.add_argument(
+        "--source-end",
+        type=int,
+        help="exclusive source transition end; excludes inference-only tail padding",
+    )
     parser.add_argument("--search", type=int, default=12)
     parser.add_argument("--segments", type=int, default=3)
     args = parser.parse_args()
@@ -112,9 +117,20 @@ def main() -> None:
         generated = extract(args.gen, work / "generated")
         source = extract(args.source, work / "source")
         gen_sig, source_sig = signature(generated), signature(source)
+        total_source_transitions = len(source_sig)
         if args.start < 0 or args.end > len(gen_sig) or args.end <= args.start:
             raise SystemExit(f"invalid transition range [{args.start}, {args.end}); generated has {len(gen_sig)} transitions")
+        if args.source_end is not None:
+            if args.source_end < 1 or args.source_end > len(source_sig):
+                raise SystemExit(
+                    f"invalid source transition end {args.source_end}; source has {len(source_sig)} transitions"
+                )
+            source_sig = source_sig[:args.source_end]
         print(f"generated_frames={len(generated)} source_frames={len(source)}")
+        print(
+            f"source_transitions_used={len(source_sig)} "
+            f"source_transitions_total={total_source_transitions}"
+        )
         print("metric=motion-energy NCC in center crop; screening only, not pose certification")
         print("segment      best_NCC  offset  margin_to_runner_up  interpretation")
         width = args.end - args.start

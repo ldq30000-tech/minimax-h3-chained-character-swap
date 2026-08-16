@@ -1,0 +1,152 @@
+{
+  "id": "f01f41d4-7375-4e30-8c4c-93f86e71e047",
+  "revision": 1,
+  "last_node_id": 3,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "H3FullVideoInputs",
+      "pos": [80, 100],
+      "size": [420, 310],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "source_video",
+          "type": "STRING",
+          "links": [1],
+          "slot_index": 0
+        },
+        {
+          "name": "reference_images_json",
+          "type": "STRING",
+          "links": [2],
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3FullVideoInputs"
+      },
+      "widgets_values": [
+        "source_long_video.mp4",
+        "character_front.png",
+        "character_side.png",
+        "character_back.png",
+        "character_face_closeup.png"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "H3FullVideoConfig",
+      "pos": [600, 100],
+      "size": [680, 850],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source_video",
+          "type": "STRING",
+          "link": 1
+        },
+        {
+          "name": "reference_images_json",
+          "type": "STRING",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "config_path",
+          "type": "STRING",
+          "links": [3],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3FullVideoConfig"
+      },
+      "widgets_values": [
+        "C:/ComfyUI/custom_nodes/minimax-h3-chained-character-swap/assets/workflows/t3-ref2va-initial-template.json",
+        "C:/ComfyUI/custom_nodes/minimax-h3-chained-character-swap/assets/workflows/t3-ref2va-context-taper-template.json",
+        "http://127.0.0.1:8188",
+        "C:/ComfyUI/input",
+        "C:/ComfyUI/output",
+        "D:/project/runs/h3-full-video-001",
+        "",
+        "{\"source_video\":\"43\",\"ref2va\":\"20\",\"noise\":\"12\",\"scheduler\":\"14\",\"output\":\"19\"}",
+        "{\"source_video\":\"43\",\"context_video\":\"101\",\"plan\":\"100\",\"raw_output\":\"19\",\"delivery_output\":\"108\"}",
+        "{\"max_abs_phase_offset\":2,\"min_phase_ncc\":0.3,\"max_seam_diff\":0.04,\"min_sharpness_ratio\":0.75,\"min_source_rms_difference\":8.0}",
+        124,
+        22,
+        576,
+        1024,
+        20,
+        730000,
+        5400,
+        0.45,
+        0.1,
+        3
+      ]
+    },
+    {
+      "id": 3,
+      "type": "H3FullVideoLaunch",
+      "pos": [1380, 100],
+      "size": [320, 150],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "config_path",
+          "type": "STRING",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "run_dir",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 0
+        },
+        {
+          "name": "launch_status",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 1
+        },
+        {
+          "name": "state_path",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3FullVideoLaunch"
+      },
+      "widgets_values": [
+        "start"
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "STRING"],
+    [2, 1, 1, 2, 1, "STRING"],
+    [3, 2, 0, 3, 0, "STRING"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8,
+      "offset": [80, 80]
+    }
+  },
+  "version": 0.4
+}

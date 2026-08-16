@@ -56,6 +56,7 @@ H3's natively generated audio (`generated_audio` / `source_plus_timeline` chain 
 | `context_frames` | Carried context length (default `22`). The Motion Context plugin only accepts `1/5/22/39`; `22` is the validated value. |
 | `steps` | Sampling steps; omit to keep the template value. |
 | `segments[].noise_seed` | Optional deterministic chroma-noise pattern seed. Defaults to a stable value derived from the segment generation seed. |
+| `segments[].unique_frames` | Optional real delivered-frame count for the final continuation only. The full-video controller uses this when its final source slice contains inference-only duplicate padding. |
 
 ## Numerical gates
 
@@ -70,6 +71,12 @@ All gate fields are optional. Omit one to observe but not halt on that metric.
 | `min_source_rms_difference` | Mean RGB RMS difference at three aligned frames; screens `output == source` | task-specific; example `8.0` |
 
 A phase screen is a screening metric, not pose certification. `min_source_rms_difference` is also only a screen: similar-looking target/source identities or empty frames can false-halt, while a changed background can hide a failed face replacement. Passing all gates is permission to continue automatically, not a declaration that a clip is production-ready.
+
+For a partial final segment, sharpness and phase metrics exclude inference-only
+padding. If the real delivery has fewer than `phase_segments * 4 + 1` frames,
+the runner records `phase_skipped` and a reason in `qa.json`, writes the same
+reason to `phase_screen.txt`, and skips only the phase gates for that segment.
+Seam, sharpness, and source-difference gates still run.
 
 > **Gate values are baseline-specific.** The documented defaults were measured on a 576×1024 portrait, 4-image POC. Landscape output, a single reference image, or low-texture (e.g. chibi) subjects shift `min_phase_ncc` and `max_seam_diff` substantially — a real, human-accepted candidate can show `min_phase_ncc` ≈ 0.15 and `seam_diff` ≈ 0.22. Retune or disable gates for non-POC setups rather than trusting the defaults.
 

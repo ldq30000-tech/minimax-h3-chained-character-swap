@@ -1,0 +1,39 @@
+{
+  "1": {
+    "class_type": "H3FullVideoConfig",
+    "inputs": {
+      "source_video": "D:/project/source_long_video.mp4",
+      "initial_workflow_path": "C:/ComfyUI/custom_nodes/minimax-h3-chained-character-swap/assets/workflows/t3-ref2va-initial-template.json",
+      "continuation_workflow_path": "C:/ComfyUI/custom_nodes/minimax-h3-chained-character-swap/assets/workflows/t3-ref2va-context-taper-template.json",
+      "comfy_url": "http://127.0.0.1:8188",
+      "comfy_input_dir": "C:/ComfyUI/input",
+      "comfy_output_dir": "C:/ComfyUI/output",
+      "run_dir": "D:/project/runs/h3-full-video-001",
+      "reference_images_json": "[\"D:/project/character_front.png\", \"D:/project/character_side.png\", \"D:/project/character_back.png\", \"D:/project/character_face_closeup.png\"]",
+      "prompt": "",
+      "initial_nodes_json": "{\"source_video\":\"43\",\"ref2va\":\"20\",\"noise\":\"12\",\"scheduler\":\"14\",\"output\":\"19\"}",
+      "continuation_nodes_json": "{\"source_video\":\"43\",\"context_video\":\"101\",\"plan\":\"100\",\"raw_output\":\"19\",\"delivery_output\":\"108\"}",
+      "gates_json": "{\"max_abs_phase_offset\":2,\"min_phase_ncc\":0.3,\"max_seam_diff\":0.04,\"min_sharpness_ratio\":0.75,\"min_source_rms_difference\":8.0}",
+      "raw_frames": 124,
+      "context_frames": 22,
+      "width": 576,
+      "height": 1024,
+      "steps": 20,
+      "seed_base": 730000,
+      "timeout_seconds": 5400,
+      "taper_alpha": 0.45,
+      "taper_alpha_end": 0.1,
+      "taper_ramp_frames": 3
+    }
+  },
+  "2": {
+    "class_type": "H3FullVideoLaunch",
+    "inputs": {
+      "config_path": [
+        "1",
+        0
+      ],
+      "action": "start"
+    }
+  }
+}

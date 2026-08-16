@@ -53,7 +53,7 @@ def now() -> str:
 
 def load_json(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text())
+        value = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         raise ChainError(f"Cannot parse JSON {path}: {exc}") from exc
     if not isinstance(value, dict):
@@ -72,7 +72,10 @@ def validate_api_workflow(workflow: dict[str, Any], path: Path) -> None:
 def write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    temp.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     temp.replace(path)
 
 
@@ -159,6 +162,20 @@ def ffmpeg_tail(source: Path, destination: Path, frames: int) -> None:
         raise ChainError(f"Tail extraction produced wrong frame count: {destination}")
 
 
+def trim_video_frames(source: Path, destination: Path, frames: int) -> None:
+    if frames < 1:
+        raise ChainError("trim_video_frames requires at least one frame")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    run([
+        "ffmpeg", "-y", "-v", "error", "-i", source, "-vf",
+        f"trim=end_frame={frames},setpts=PTS-STARTPTS", "-frames:v", str(frames),
+        "-fps_mode", "cfr", "-r", get_fps(source), "-c:v", "libx264", "-crf", "16",
+        "-pix_fmt", "yuv420p", "-an", destination,
+    ])
+    if frame_count(destination) != frames:
+        raise ChainError(f"Frame trim produced wrong frame count: {destination}")
+
+
 def image_at(video: Path, index: int, mode: str = "L", size: tuple[int, int] = (96, 170)) -> Image.Image:
     command = [
         "ffmpeg", "-v", "error", "-i", str(video), "-vf", f"select='eq(n\\,{index})'",
@@ -189,7 +206,10 @@ def laplacian_variance(
     skip: int,
     every: int = 4,
     target_size: tuple[int, int] | None = None,
+    max_frames: int | None = None,
 ) -> float:
+    if max_frames is not None and max_frames < 1:
+        raise ChainError("max_frames must be positive when provided")
     width, height = target_size or video_size(video)
     frame_bytes = width * height
     lap = ImageFilter.Kernel((3, 3), (0, 1, 0, 1, -4, 1, 0, 1, 0), scale=1)
@@ -208,6 +228,8 @@ def laplacian_variance(
             block = process.stdout.read(frame_bytes)
             if len(block) < frame_bytes:
                 break
+            if max_frames is not None and index >= skip + max_frames:
+                break
             if index >= skip and (index - skip) % every == 0:
                 image = Image.frombytes("L", (width, height), block)
                 values.append(ImageStat.Stat(image.filter(lap)).var[0])
@@ -224,10 +246,15 @@ def sharpness_ratio(delivered: Path, source: Path, context_frames: int) -> float
     # Delivered frame 0 corresponds to source frame context_frames in the overlapping source slice.
     # Laplacian variance is resolution-sensitive, so compare at the delivered resolution.
     size = video_size(delivered)
-    denominator = laplacian_variance(source, context_frames, target_size=size)
+    delivered_frames = frame_count(delivered)
+    denominator = laplacian_variance(
+        source, context_frames, target_size=size, max_frames=delivered_frames
+    )
     if denominator <= 0:
         raise ChainError(f"Source sharpness is zero; cannot compute ratio: {source}")
-    return laplacian_variance(delivered, 0, target_size=size) / denominator
+    return laplacian_variance(
+        delivered, 0, target_size=size, max_frames=delivered_frames
+    ) / denominator
 
 
 def source_rms_difference(delivered: Path, source: Path, context_frames: int, samples: int = 3) -> float:
@@ -256,7 +283,11 @@ def http_json(url: str, endpoint: str, payload: dict[str, Any] | None = None) ->
             )
         with urllib.request.urlopen(request, timeout=60) as response:
             value = json.loads(response.read())
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace").strip()
+        suffix = f": {detail[:4000]}" if detail else ""
+        raise ChainError(f"ComfyUI request {endpoint} failed: {exc}{suffix}") from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise ChainError(f"ComfyUI request {endpoint} failed: {exc}") from exc
     if not isinstance(value, dict):
         raise ChainError(f"ComfyUI request {endpoint} returned a non-object")
@@ -327,10 +358,58 @@ def parse_phase(raw: Path, source: Path, context_frames: int, raw_frames: int, s
     result = run([
         sys.executable, PHASE_AUDIT, raw, source,
         "--start", str(context_frames), "--end", str(raw_frames - 1),
+        "--source-end", str(raw_frames - 1),
         "--search", str(search), "--segments", str(segments),
     ], timeout=900)
     offsets, nccs = parse_phase_output(result.stdout, segments)
     return offsets, nccs, result.stdout
+
+
+def measure_phase(
+    raw: Path,
+    source: Path,
+    context_frames: int,
+    unique_frames: int,
+    search: int,
+    segments: int,
+) -> tuple[dict[str, Any], str]:
+    """Measure only real delivery transitions, excluding inference padding."""
+    available_transitions = max(0, unique_frames - 1)
+    required_transitions = segments * 4
+    if available_transitions < required_transitions:
+        reason = (
+            f"Only {unique_frames} real delivery frame(s) provide "
+            f"{available_transitions} transition(s); the {segments}-segment phase "
+            f"screen requires at least {required_transitions} transitions. "
+            "Inference-only padding was excluded."
+        )
+        report = (
+            "phase_skipped=true\n"
+            f"real_delivery_frames={unique_frames}\n"
+            f"available_transitions={available_transitions}\n"
+            f"required_transitions={required_transitions}\n"
+            f"reason={reason}\n"
+        )
+        return {
+            "phase_offsets": [],
+            "phase_ncc": [],
+            "phase_skipped": True,
+            "phase_skip_reason": reason,
+        }, report
+
+    offsets, nccs, report = parse_phase(
+        raw,
+        source,
+        context_frames,
+        context_frames + unique_frames,
+        search,
+        segments,
+    )
+    return {
+        "phase_offsets": offsets,
+        "phase_ncc": [round(value, 4) for value in nccs],
+        "phase_skipped": False,
+    }, report
 
 
 def unique_name(run_id: str, label: str, original: Path) -> str:
@@ -371,6 +450,10 @@ def patch_plan(workflow: dict[str, Any], node_id: str, *, segment_name: str, see
     inputs["plan_json"] = json.dumps(plan, ensure_ascii=False)
     inputs["run_name"] = segment_name
     inputs["generation_fingerprint"] = f"h3-context-taper-runner|{segment_name}|seed={seed}"
+    # Newer H3 Contex Loop releases made these plan defaults required inputs.
+    # Set them here so archived templates remain resumable across node upgrades.
+    inputs.setdefault("continuation_mode", "guide")
+    inputs.setdefault("video_blend_frames", 0)
     if width is not None:
         inputs["width"] = width
     if height is not None:
@@ -383,12 +466,13 @@ def patch_plan(workflow: dict[str, Any], node_id: str, *, segment_name: str, see
 
 def evaluate(metrics: dict[str, Any], gates: dict[str, Any]) -> list[str]:
     failures: list[str] = []
-    max_offset = gates.get("max_abs_phase_offset")
-    if max_offset is not None and max(abs(value) for value in metrics["phase_offsets"]) > int(max_offset):
-        failures.append(f"max_abs_phase_offset>{max_offset}: {metrics['phase_offsets']}")
-    min_ncc = gates.get("min_phase_ncc")
-    if min_ncc is not None and min(metrics["phase_ncc"]) < float(min_ncc):
-        failures.append(f"min_phase_ncc<{min_ncc}: {metrics['phase_ncc']}")
+    if not metrics.get("phase_skipped", False):
+        max_offset = gates.get("max_abs_phase_offset")
+        if max_offset is not None and max(abs(value) for value in metrics["phase_offsets"]) > int(max_offset):
+            failures.append(f"max_abs_phase_offset>{max_offset}: {metrics['phase_offsets']}")
+        min_ncc = gates.get("min_phase_ncc")
+        if min_ncc is not None and min(metrics["phase_ncc"]) < float(min_ncc):
+            failures.append(f"min_phase_ncc<{min_ncc}: {metrics['phase_ncc']}")
     max_seam = gates.get("max_seam_diff")
     if max_seam is not None and metrics["seam_diff"] > float(max_seam):
         failures.append(f"seam_diff>{max_seam}: {metrics['seam_diff']:.4f}")
@@ -692,19 +776,40 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
         raw = segment_dir / "raw.mp4"
         delivery = segment_dir / "delivery.mp4"
         shutil.copy2(raw_server, raw)
-        shutil.copy2(delivered_server, delivery)
+        standard_delivery_frames = raw_frames - context_frames
+        try:
+            unique_frames = int(segment_cfg.get("unique_frames", standard_delivery_frames))
+        except (TypeError, ValueError) as exc:
+            raise ChainError(f"Invalid unique_frames for {label}") from exc
+        if not 1 <= unique_frames <= standard_delivery_frames:
+            raise ChainError(
+                f"unique_frames for {label} must be between 1 and {standard_delivery_frames}"
+            )
+        if unique_frames != standard_delivery_frames and index != len(chain) - 1:
+            raise ChainError("Only the final continuation segment may use a partial unique_frames value")
+        delivered_count = frame_count(delivered_server)
+        if delivered_count != standard_delivery_frames:
+            raise ChainError(f"Trimmed delivery for {label} has wrong frame count")
+        if unique_frames == standard_delivery_frames:
+            shutil.copy2(delivered_server, delivery)
+            delivery_full: Path | None = None
+        else:
+            delivery_full = segment_dir / "delivery_full_inference.mp4"
+            shutil.copy2(delivered_server, delivery_full)
+            trim_video_frames(delivery_full, delivery, unique_frames)
         if frame_count(raw) != raw_frames:
             raise ChainError(f"Raw output for {label} has wrong frame count")
-        if frame_count(delivery) != raw_frames - context_frames:
+        if frame_count(delivery) != unique_frames:
             raise ChainError(f"Trimmed delivery for {label} has wrong frame count")
         require_fps(raw)
         require_fps(delivery)
 
-        offsets, nccs, phase_report = parse_phase(raw, source, context_frames, raw_frames, phase_search, phase_segments)
+        phase_metrics, phase_report = measure_phase(
+            raw, source, context_frames, unique_frames, phase_search, phase_segments
+        )
         (segment_dir / "phase_screen.txt").write_text(phase_report)
         metrics = {
-            "phase_offsets": offsets,
-            "phase_ncc": [round(value, 4) for value in nccs],
+            **phase_metrics,
             "seam_diff": round(seam_diff(previous, delivery), 5),
             "sharpness_ratio": round(sharpness_ratio(delivery, source, context_frames), 4),
             "source_rms_difference": round(source_rms_difference(delivery, source, context_frames), 3),
@@ -722,11 +827,14 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
             "context_injected": str(injected_context),
             "raw": str(raw),
             "delivery": str(delivery),
+            "unique_frames": unique_frames,
             "workflow": str(workflow_path),
             "metrics": metrics,
             "gate_failures": failures,
             "finished_at": now(),
         }
+        if delivery_full is not None:
+            record["delivery_full_inference"] = str(delivery_full)
         # Optional source-audio mux. The silent delivery stays untouched as the
         # lineage/context artifact; the muxed copy is for review and assembly.
         audio_cfg = segment_cfg.get("audio")
@@ -744,7 +852,7 @@ def run_chain(config_path: Path, approve_latest: bool) -> int:
             # audio timeline; the delivery begins context_frames later.
             delivery_offset = audio_offset + context_frames / delivery_fps
             muxed = segment_dir / "delivery_with_audio.mp4"
-            mux_audio(delivery, audio_source, delivery_offset, (raw_frames - context_frames) / delivery_fps, muxed)
+            mux_audio(delivery, audio_source, delivery_offset, unique_frames / delivery_fps, muxed)
             record["delivery_with_audio"] = str(muxed)
         write_json(segment_dir / "qa.json", record)
         completed.append(record)

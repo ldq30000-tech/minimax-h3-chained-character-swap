@@ -1,0 +1,44 @@
+{
+  "id": "c125424e-2ea2-4a37-9809-9f658a53c9e1",
+  "revision": 0,
+  "last_node_id": 1,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "H3FullVideoOneClick",
+      "pos": [160, 100],
+      "size": [560, 760],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "run_dir", "type": "STRING", "links": null, "slot_index": 0},
+        {"name": "launch_status", "type": "STRING", "links": null, "slot_index": 1},
+        {"name": "state_path", "type": "STRING", "links": null, "slot_index": 2}
+      ],
+      "properties": {"Node name for S&R": "H3FullVideoOneClick"},
+      "widgets_values": [
+        "source_long_video.mp4",
+        "character_front.png",
+        "character_side.png",
+        "character_back.png",
+        "character_face_closeup.png",
+        "",
+        "http://127.0.0.1:8188",
+        "D:/project/runs/h3-full-video-one-click",
+        "start",
+        576,
+        1024,
+        20,
+        730000
+      ]
+    }
+  ],
+  "links": [],
+  "groups": [],
+  "config": {},
+  "extra": {"ds": {"scale": 1.0, "offset": [80, 80]}},
+  "version": 0.4
+}
