@@ -88,13 +88,16 @@ long at 24 fps, for example:
 ]
 ```
 
-## Full source-video loop
+## Low-VRAM full source-video loop
 
 For the final visible native recursive canvas, import
 `assets/workflows/h3-native-loop-final-stable-ui.json`. It automatically counts
 and segments a complete source video without holding the complete decoded frame
-batch in RAM. Each recursive pass decodes only its current roughly five-second
-24 fps source window. The graph keeps every expensive H3 node visible,
+batch in RAM. The 12 GB stable profile caps each recursive pass at 107 frames
+(about 4.46 seconds at 24 fps). When the source length does not divide cleanly,
+inference-only tail padding rebalances the plan instead of folding a tail into
+a 124/141/158-frame memory spike; Exact Trim removes that padding before delivery.
+The graph keeps every expensive H3 node visible,
 checkpoints each clean segment, assembles the chain, trims inference-only tail
 padding, and restores the original source soundtrack. If the source has no
 decodable audio track, it supplies same-duration 44.1 kHz mono silence instead
@@ -102,6 +105,10 @@ of aborting. The final exact-trim node shows the playable delivered video and it
 saved path directly on the canvas. The Stable graph keeps
 ReservedVRAM and the KJNodes memory-efficient SageAttention patch but leaves all
 Turbo LoRAs disabled and disconnected from the pruned INT8 base.
+
+The 12 GB label identifies the tested low-VRAM target profile; it is not a
+minimum-VRAM or runtime guarantee. Actual speed still depends on offload policy,
+system RAM, source length, and the installed H3 node versions.
 
 The neighboring `h3-native-loop-final-turbo-experimental-ui.json` preserves the
 enabled Turbo route from the supplied final canvas for inspection only. It is

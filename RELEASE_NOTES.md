@@ -31,14 +31,19 @@ non-pruned base and the LoRA's documented sampling schedule.
 - The final exact-trim output publishes a playable video preview and its saved path
   directly on the workflow canvas.
 - `res_multistep`, `beta`, 20 steps, and denoise 1.0 are the stable defaults.
-- The streamed release retains 576x1024 output, 24 fps indexing, 20 steps, the
-  existing seeds, and 22-frame Motion Context; the memory fix does not lower quality.
+- The stable low-VRAM profile caps scenes at 107 frames so 12 GB systems avoid
+  the observed 141/158-frame paging cliff. The planner may add inference-only
+  tail padding to keep every scene bounded; Exact Trim removes it from delivery.
+- The low-VRAM profile retains 576x1024 output, 24 fps indexing, 20 steps, the
+  existing seeds, and 22-frame Motion Context. It does add some segment boundaries,
+  so seam review remains required and identical output quality is not guaranteed.
 
-The local integration run used 614 source frames at 576x1024 and produced a
-614-frame, 24 fps, 25.583333-second H.264/AAC final. The six-segment run completed
-in about 2 hours 29 minutes on an RTX 5070 Ti Laptop GPU with 12 GB VRAM. This is
-an environment-specific validation record, not a performance or minimum-memory
-guarantee.
+The historical local integration run used the earlier 124-frame scene profile with
+614 source frames at 576x1024 and produced a 614-frame, 24 fps, 25.583333-second
+H.264/AAC final. That six-segment run completed in about 2 hours 29 minutes on an
+RTX 5070 Ti Laptop GPU with 12 GB VRAM. The current 107-frame profile targets lower
+peak memory and has not been given the same full-duration benchmark. These records
+are not a performance or minimum-memory guarantee.
 
 The streamed-source update was additionally checked against the actual 768-frame,
 720x1280, 30 fps, 25.6-second reference. Preparation reported 614 unique 24 fps

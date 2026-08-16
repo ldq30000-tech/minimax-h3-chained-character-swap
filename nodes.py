@@ -144,12 +144,68 @@ def _validate_h3_settings(raw_frames: int, context_frames: int, width: int, heig
         raise H3ChainNodeError("steps must be positive")
 
 
+def _bounded_native_scene_lengths(
+    inference_frames: int,
+    raw_frames: int,
+    context_frames: int,
+) -> list[int] | None:
+    """Return the fewest >=90-frame scenes without exceeding raw_frames."""
+    valid_lengths = list(range(90, raw_frames + 1, 17))
+    max_remaining = inference_frames - min(valid_lengths)
+    if max_remaining < 0:
+        return None
+    continuation_options = [
+        (length, length - context_frames) for length in reversed(valid_lengths)
+    ]
+    min_tail_scenes: list[int | None] = [None] * (max_remaining + 1)
+    min_tail_scenes[0] = 0
+    for delivered in range(1, max_remaining + 1):
+        counts = [
+            min_tail_scenes[delivered - contribution]
+            for _, contribution in continuation_options
+            if delivered >= contribution
+            and min_tail_scenes[delivered - contribution] is not None
+        ]
+        if counts:
+            min_tail_scenes[delivered] = min(counts) + 1
+
+    best: list[int] | None = None
+    for first in reversed(valid_lengths):
+        remaining = inference_frames - first
+        if remaining < 0 or min_tail_scenes[remaining] is None:
+            continue
+        tail: list[int] = []
+        while remaining:
+            count = min_tail_scenes[remaining]
+            for length, contribution in continuation_options:
+                previous = remaining - contribution
+                if (
+                    previous >= 0
+                    and min_tail_scenes[previous] is not None
+                    and min_tail_scenes[previous] == count - 1
+                ):
+                    tail.append(length)
+                    remaining = previous
+                    break
+            else:  # pragma: no cover - guarded by the dynamic program above
+                raise H3ChainNodeError("cannot reconstruct bounded H3 scene plan")
+        candidate = [first, *tail]
+        if best is None or (
+            len(candidate), tuple(-value for value in candidate)
+        ) < (
+            len(best), tuple(-value for value in best)
+        ):
+            best = candidate
+
+    return best
+
+
 def _native_loop_lengths(
     source_frames: int,
     raw_frames: int = 124,
     context_frames: int = 22,
 ) -> tuple[list[int], int]:
-    """Plan H3-valid raw scene lengths and inference-only end padding."""
+    """Plan bounded H3-valid scene lengths and inference-only end padding."""
     _validate_h3_settings(raw_frames, context_frames, 32, 32, 1)
     if source_frames < 1:
         raise H3ChainNodeError("source video must contain at least one 24 fps frame")
@@ -158,20 +214,34 @@ def _native_loop_lengths(
     if inference_frames <= raw_frames:
         return [max(5, inference_frames)], inference_frames - source_frames
 
-    delivered_per_continuation = raw_frames - context_frames
-    remaining = inference_frames - raw_frames
-    lengths = [raw_frames]
-    while remaining > delivered_per_continuation:
-        lengths.append(raw_frames)
-        remaining -= delivered_per_continuation
+    # The old greedy tail fold could turn [124, 124, 124, 56] into
+    # [124, 124, 158], crossing the memory cliff on 12 GB GPUs. Search a few
+    # H3-grid padding increments for a fully bounded plan; Exact Trim removes
+    # those cloned end frames from delivery.
+    lengths = None
+    if context_frames != 1:
+        for _ in range(17):
+            lengths = _bounded_native_scene_lengths(
+                inference_frames, raw_frames, context_frames
+            )
+            if lengths is not None:
+                break
+            inference_frames += 17
 
-    final_raw = remaining + context_frames
-    # Very short final scenes are outside the documented H3 training range.
-    # Fold one preceding 102-frame delivery into the final scene when needed.
-    if final_raw < 90 and len(lengths) > 1:
-        lengths.pop()
-        final_raw += delivered_per_continuation
-    lengths.append(final_raw)
+    if lengths is None:
+        # Context length 1 has a sparse modular grid. Retain the valid legacy
+        # fallback instead of adding a potentially very long inference tail.
+        delivered_per_continuation = raw_frames - context_frames
+        remaining = inference_frames - raw_frames
+        lengths = [raw_frames]
+        while remaining > delivered_per_continuation:
+            lengths.append(raw_frames)
+            remaining -= delivered_per_continuation
+        final_raw = remaining + context_frames
+        if final_raw < 90 and len(lengths) > 1:
+            lengths.pop()
+            final_raw += delivered_per_continuation
+        lengths.append(final_raw)
     for index, length in enumerate(lengths, start=1):
         if (length - 5) % 17 or length <= (context_frames if index > 1 else 0):
             raise H3ChainNodeError(f"internal scene plan produced invalid H3 length {length}")
@@ -415,7 +485,7 @@ class H3NativeLongVideoPrepare:
             "required": {
                 "source_video": ("VIDEO",),
                 "prompt": ("STRING", {"default": "", "multiline": True, "dynamicPrompts": False}),
-                "raw_frames": ("INT", {"default": 124, "min": 90, "max": 362, "step": 17}),
+                "raw_frames": ("INT", {"default": 107, "min": 90, "max": 362, "step": 17}),
                 "context_frames": ([22], {"default": 22}),
                 "steps": ("INT", {"default": 20, "min": 1, "max": 100}),
                 "base_seed": ("INT", {"default": 730000, "min": 0, "max": 18446744073709551615}),
