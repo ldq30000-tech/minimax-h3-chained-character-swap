@@ -22,6 +22,6 @@ their source videos, reference images, generated media, and model weights.
 No model weights, source videos, identity reference images, generated videos,
 access tokens, or private local paths are stored in the Git source history.
 The `v1.0.0` Release separately includes two user-supplied demonstration videos:
-a generated result and a shorter template/reference clip. Those media files retain
+a generated result and a template/reference video. Those media files retain
 their own applicable rights and are not automatically covered by this repository's
 MIT license.
