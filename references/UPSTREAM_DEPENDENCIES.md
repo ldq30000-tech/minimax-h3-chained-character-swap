@@ -5,6 +5,8 @@ This repository does **not** include MiniMax H3 weights or Motion Context node c
 ## Required upstream components
 
 - [ComfyUI](https://github.com/Comfy-Org/ComfyUI) with native MiniMax H3 / Ref2VA support.
+- [HM-RunningHub/ComfyUI_RH_MinMaxH3](https://github.com/HM-RunningHub/ComfyUI_RH_MinMaxH3)
+  for the tested H3 Ref2VA runtime and model loaders.
 - [ethanfel/ComfyUI-MiniMaxH3-Contex-Loop](https://github.com/ethanfel/ComfyUI-MiniMaxH3-Contex-Loop)
   — provides the `MiniMaxH3ChainPlan`, `MiniMaxH3ChainExternalVideo`,
   `MiniMaxH3ChainLoopStart`, `MiniMaxH3ChainCurrent`, `MiniMaxH3ChainContext`,
@@ -18,6 +20,13 @@ This repository does **not** include MiniMax H3 weights or Motion Context node c
   ethanfel's pack, but is not required for this skill.
 
 These projects are GPL-3.0 and have their own installation instructions, licensing, and compatibility constraints. This repository only supplies an external workflow configuration and independent helper scripts; it does not redistribute or modify their code.
+
+The final stable single-canvas workflow additionally uses:
+
+- [kijai/ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) for `MiniMaxH3MemoryEfficientSageAttentionPatch`.
+- [Windecay/ComfyUI-ReservedVRAM](https://github.com/Windecay/ComfyUI-ReservedVRAM) for `ReservedVRAMSetter`.
+
+See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for the complete reference and redistribution statement.
 
 ## Model and media licensing
 

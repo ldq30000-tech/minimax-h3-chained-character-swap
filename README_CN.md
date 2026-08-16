@@ -1,0 +1,116 @@
+# MiniMax H3 单画布长视频人物替换工作流
+
+这是一个基于 MiniMax H3 Ref2VA 与 Motion Context 的 ComfyUI 长视频人物替换方案。
+最终版本把输入、动态分段、递归生成、上下文续接、片段保存、检查点恢复、合并、精确裁剪和原音轨恢复集中在一张可见画布中。
+
+## 推荐下载
+
+| 文件 | 用途 |
+|---|---|
+| `assets/workflows/h3-native-loop-final-stable-ui.json` | 推荐的最终稳定版；Turbo LoRA 已断开 |
+| `assets/workflows/h3-native-loop-final-turbo-experimental-ui.json` | 保留最终画布中的 Turbo 路线，仅供兼容模型实验 |
+| `assets/workflows/h3-native-loop-long-video-character-swap-ui.json` | 已验证的基础单画布版本 |
+| `RELEASE_NOTES.md` | 最终版本行为与本地验证记录 |
+| `THIRD_PARTY_NOTICES.md` | 参考项目、第三方依赖和许可说明 |
+
+仓库不包含模型、源视频、人物参考图或生成成片。
+
+## 相对参考实现的扩展与优势
+
+本项目明确参考并保留
+[MacroSony/minimax-h3-chained-character-swap](https://github.com/MacroSony/minimax-h3-chained-character-swap)
+的历史、MIT 许可、22 帧 Motion Context 配方、临时色度噪声渐退、QA 方法和安全停止原则。
+最终单画布版本在此基础上增加：
+
+1. **一个工作流完成完整链路。** 昂贵的 Ref2VA、Motion Context、采样、裁剪、保存和循环节点全部在画布上可见，便于定位错误。
+2. **自动适配视频长度。** 输入完整视频后自动转为 24 fps、统计唯一帧数，并按 H3 的 `17k+5` 长度网格规划片段。
+3. **只在推理输入补帧。** 尾部不足时只复制推理参考帧，最终节点严格裁回真实源帧数，不把重复补帧交付出去。
+4. **连续而不重播时间线。** 每段读取连续源时间戳，后续段使用前一段干净输出的 22 帧尾部建立 Motion Context，然后删除重复上下文。
+5. **原声音轨自动恢复。** 中间生成音频仅用于链路；最终 MP4 重新封装原视频声音并保持源时长。
+6. **可诊断、可恢复。** 每段保存 MP4、音频与 safetensors 检查点；Review Gate 可见但默认关闭；完整片段可以不重新采样而恢复合并。
+7. **低显存辅助链。** 最终画布保留 ReservedVRAM 与 KJNodes 的 H3 SageAttention patch。12 GB 环境已经完成过实例运行，但不代表最低显存保证。
+8. **避免错误加速配置。** 当前 pruned INT8 基础模型下，Turbo LoRA 在稳定版中明确断开，防止把不兼容路线误当成可用加速。
+
+这些改进提升的是自动化、可观察性、时间线完整性和恢复能力；它们不构成逐帧动作严格控制，也不能取消人工质量检查。
+
+## 环境与前提
+
+- Windows 或 Linux，Python 3.10+。
+- 支持当前 ComfyUI/PyTorch 的 NVIDIA CUDA 环境。
+- FFmpeg 与 FFprobe 可在 `PATH` 中调用。
+- 足够的 GPU 显存、系统内存和模型存储。上游 RH 节点以 24 GB 级单卡为主要目标；更低显存依赖强卸载并会显著变慢。
+- 输入必须是用户有权使用的源视频、角色参考图和模型。
+
+本地验证环境记录：RTX 5070 Ti Laptop 12 GB、576x1024、24 fps、20 步、6 段，完整生成约 2 小时 29 分钟。该数据不是通用性能保证。
+
+## 必需自定义节点
+
+在 `ComfyUI/custom_nodes` 中分别安装：
+
+```bash
+git clone https://github.com/ldq30000-tech/minimax-h3-chained-character-swap.git
+git clone https://github.com/HM-RunningHub/ComfyUI_RH_MinMaxH3.git
+git clone https://github.com/ethanfel/ComfyUI-MiniMaxH3-Contex-Loop.git
+git clone https://github.com/kijai/ComfyUI-KJNodes.git
+git clone https://github.com/Windecay/ComfyUI-ReservedVRAM.git
+```
+
+使用 ComfyUI 自己的 Python 环境安装每个仓库的 `requirements.txt`，然后重启 ComfyUI。
+若使用其他兼容 Motion Context 实现，需要确保它提供工作流中同名的 `MiniMaxH3Chain*`、引用、裁剪、保存和合并节点。
+
+## 模型文件
+
+稳定版默认引用以下名称，放在对应的 ComfyUI 模型目录；实际目录以 RH MiniMax H3 节点文档为准：
+
+```text
+minimax/minimax_h3_ref2va_pruned_int8_convrot.safetensors
+minimax/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
+minimax/minimax_h3_video_vae_fp16.safetensors
+minimax/minimax_h3_audio_vae_fp32.safetensors
+```
+
+推荐采样配置：`res_multistep`、`beta`、20 步、denoise 1.0。
+
+稳定版画布中展示的两个 Turbo LoRA 均为禁用状态。不要把它们连接到
+`minimax_h3_ref2va_pruned_int8_convrot.safetensors`。只有换成兼容的非 pruned H3 基础模型后，才能按照对应 LoRA 文档启用并调整步数。
+
+## 输入文件
+
+导入稳定工作流后，在左侧选择：
+
+1. `@character_front`：人物正面图。
+2. `@character_side`：人物侧面图。
+3. `@character_back`：人物背面图。
+4. `@character_face`：高分辨率脸部近照。
+5. `source_video`：完整原视频，最好带原始声音。
+
+工作流内的占位文件名只用于显示，必须重新选择自己的文件。近景镜头缺少脸部特写参考时，换脸失败通常不是 seed 能解决的问题。
+
+## 使用方法
+
+1. 导入 `h3-native-loop-final-stable-ui.json`。
+2. 选择四张角色图和一个源视频。
+3. 检查模型名称、输出分辨率、提示词、seed 和输出目录。
+4. 保持 Review Gate 关闭即可一次排队自动跑完整链路；需要逐段验收时再开启。
+5. 点击 Queue。不要在同一 GPU 上同时排其他大型模型任务。
+6. 最终文件由绿色 `H3FinalTrimToSource` 节点输出，位于：
+
+```text
+ComfyUI/output/h3_chains/<run_name>/final/character_swap_full_exact*.mp4
+```
+
+中间的 `character_swap_assembled*.mp4` 可能包含推理尾部补帧，不是最终交付文件。
+
+## 重跑局部片段
+
+`Loop Start` 支持连续范围，例如 `scene_range = 1:2`。由于每段 Motion Context 依赖前一段，修改前两段后应从第 3 段继续生成到结尾，不能把不连续的新旧片段当作无缝链路。更换 seed 后保持模型、提示词、参考图和分段设置不变，否则旧检查点不会通过一致性校验。
+
+## 限制
+
+- 适合慢速到中速动作，不保证快速格斗或突然变向。
+- Ref2VA 与相位检测不是严格逐帧姿态控制。
+- 同一配置可能出现 seed 不替换人物的情况，需要候选 seed 与人工检查。
+- 硬切镜头应在提示词 `detailed_description` 内按时间写成多个 Shot。
+- 必须检查身份、手部、背景、锐度、动作相位、22 帧上下文出口和真实播放接缝。
+
+详细规则参见 `references/RECIPE.md`、`references/GOTCHAS.md`、`references/LIMITATIONS.md` 与 `THIRD_PARTY_NOTICES.md`。

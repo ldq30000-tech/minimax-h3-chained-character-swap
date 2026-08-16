@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
 
 # Local ComfyUI inputs / outputs / render caches
 inputs/
@@ -20,5 +21,8 @@ renders/
 .vscode/
 .idea/
 
-# Runner artifacts
+# Runner and release artifacts
 runs/
+release/
+node_modules/
+*.log

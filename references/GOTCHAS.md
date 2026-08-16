@@ -120,7 +120,8 @@ The chain delivers `raw_frames − context_frames` new frames per continuation (
 Options:
 
 - **Trim** the source to the exact total (drop the tail). This preserves the unique-timestamp acceptance rule but loses the ending.
-- **Pad** the source to the exact total (clone the last frame) only as an explicitly disclosed end hold. This no longer qualifies for a “no duplicate padding” claim, even if the hold is visually harmless. Record the number and duration of padded frames.
+- **Use the full-video controller's inference-only padding.** It clones the final source frame only inside the fixed-length H3 input, then trims the generated delivery back to `unique_frames` before QA and assembly. The delivered timeline still contains exactly one frame per real source timestamp; `STATE.json` records the inference padding count.
+- **Pad the delivered timeline** only as an explicitly disclosed end hold. This no longer qualifies for a “no duplicate padding” claim, even if the hold is visually harmless. Record the number and duration of delivered padding.
 - **Change segment length** to make it divide — but `raw_frames` is chain-wide in the runner, so this only works if you start a separate run or hand-roll the final segment.
 
 Decide explicitly and record it. Do not silently mix padded and unpadded slices, and never claim a fully unique timeline after padding.
