@@ -13,7 +13,14 @@
 | `RELEASE_NOTES.md` | 最终版本行为与本地验证记录 |
 | `THIRD_PARTY_NOTICES.md` | 参考项目、第三方依赖和许可说明 |
 
-仓库不包含模型、源视频、人物参考图或生成成片。
+Git 源码历史不包含模型、源视频、人物参考图或生成成片；用户提供的演示视频仅作为 Release 附件发布。
+
+## 演示视频
+
+- [生成效果（25.01 秒，1440x2560，60 fps）](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/generated-character-swap-result.mp4)
+- [模板/参考视频（6.94 秒，720x1280，30 fps）](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/template-reference-video.mp4)
+
+两段视频用于展示工作流输入与输出效果，但时长不同，不是严格等长的逐帧前后对比素材。视频媒体不因附加到 Release 而自动适用本仓库的 MIT 许可。
 
 ## 相对参考实现的扩展与优势
 

@@ -14,7 +14,18 @@ A portable [Agent Skill](https://agentskills.io) for chaining MiniMax H3 Ref2VA 
 - `references/` — recipe, experiment notes, limitations, and runner documentation.
 - `examples/` — the original Zhu Yuan POC workflow, preserved as a reference only. It expects files that are **not** included here.
 
-No model weights, reference images, source videos, or rendered footage are included.
+No model weights, reference images, source videos, or rendered footage are stored
+in the Git source history. User-supplied demonstration media is attached to the
+GitHub Release only.
+
+## Demo videos
+
+- [Generated result (25.01 s, 1440x2560, 60 fps)](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/generated-character-swap-result.mp4)
+- [Template/reference video (6.94 s, 720x1280, 30 fps)](https://github.com/ldq30000-tech/minimax-h3-chained-character-swap/releases/download/v1.0.0/template-reference-video.mp4)
+
+These illustrate workflow input and output, but they have different durations and
+are not an equal-length, frame-by-frame before/after pair. Release media is not
+automatically covered by this repository's MIT license.
 
 ## The recipe
 
