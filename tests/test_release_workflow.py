@@ -63,7 +63,27 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         plan = json.loads(nodes[1700]["widgets_values"][0])
         self.assertTrue(all(isinstance(shot["prompt"], str) for shot in plan["shots"]))
-        self.assertEqual(nodes[1700]["widgets_values"][1], "h3_native_loop_release")
+        self.assertEqual(
+            nodes[1700]["widgets_values"][1],
+            "h3_native_loop_streamed_release",
+        )
+
+    def test_stable_release_streams_only_the_current_source_scene(self) -> None:
+        nodes = self.nodes(self.stable)
+        self.assertEqual(nodes[1951]["type"], "H3NativeLongVideoScene")
+        self.assertEqual(
+            nodes[1952]["widgets_values"],
+            ["motion", "motion_audio", "restart_each_scene"],
+        )
+        self.assertEqual(nodes[1960]["outputs"][0]["type"], "H3_NATIVE_VIDEO_TIMELINE")
+        self.assertFalse(
+            any(output["type"] == "IMAGE" for output in nodes[1960]["outputs"])
+        )
+        self.assertEqual(nodes[1973]["type"], "H3NativeGenerationFingerprint")
+        self.assertEqual(
+            self.stable["extra"]["release"]["source_loading"],
+            "streamed current-scene windows",
+        )
 
     def test_dynamic_final_trim_and_original_audio_are_connected(self) -> None:
         nodes = self.nodes(self.stable)

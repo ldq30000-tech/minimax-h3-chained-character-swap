@@ -92,7 +92,9 @@ long at 24 fps, for example:
 
 For the final visible native recursive canvas, import
 `assets/workflows/h3-native-loop-final-stable-ui.json`. It automatically counts
-and segments a complete source video, keeps every expensive H3 node visible,
+and segments a complete source video without holding the complete decoded frame
+batch in RAM. Each recursive pass decodes only its current roughly five-second
+24 fps source window. The graph keeps every expensive H3 node visible,
 checkpoints each clean segment, assembles the chain, trims inference-only tail
 padding, and restores the original source soundtrack. If the source has no
 decodable audio track, it supplies same-duration 44.1 kHz mono silence instead
@@ -204,6 +206,8 @@ ln -s /path/to/minimax-h3-chained-character-swap \
 ## Prerequisites
 
 - ComfyUI with MiniMax H3 Ref2VA support.
+- A current ComfyUI build whose native `VIDEO` input provides streamed metadata,
+  source access, and `as_trimmed()` scene windows.
 - A compatible Motion Context node pack.
 - Python 3.10+, FFmpeg, and Pillow (`python3 -m pip install -r requirements.txt`).
 - 24 fps source slices. Resample other frame rates before slicing; the runner rejects non-24-fps inputs.

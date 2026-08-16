@@ -1,8 +1,8 @@
 {
-  "id": "d97f19d5-52cd-45a6-81b6-4439141e468f",
+  "id": "cf8b99fe-b070-41cc-a8f9-3710e72e1414",
   "revision": 0,
-  "last_node_id": 1969,
-  "last_link_id": 128,
+  "last_node_id": 1973,
+  "last_link_id": 130,
   "nodes": [
     {
       "id": 1,
@@ -193,7 +193,7 @@
         "Node name for S&R": "Note"
       },
       "widgets_values": [
-        "Four identity images own the replacement character. The source video owns motion, timing, camera, environment, cuts, and the final soundtrack."
+        "Four identity images own the replacement character. The source video owns motion, timing, camera, environment, cuts, and the final soundtrack. Source frames remain on disk until their current scene runs. Missing source audio is replaced with same-duration silence."
       ],
       "color": "#432f66",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -259,7 +259,7 @@
       "title": "NATIVE RECURSIVE LONG-VIDEO LOOP",
       "properties": {},
       "widgets_values": [
-        "Plan -> Loop Start -> Current -> Tagged Ref2VA -> Motion Context -> Sampler -> Trim -> Segment Save -> Review -> Loop End -> Assemble -> Exact Trim. All expensive generation nodes are visible on this canvas."
+        "Plan -> Loop Start -> Current -> Stream Current Source Scene -> Tagged Ref2VA -> Motion Context -> Sampler -> Trim -> Segment Save -> Review -> Loop End -> Assemble -> Exact Trim. All expensive generation nodes are visible on this canvas."
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -359,7 +359,7 @@
           "name": "source_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 120
+          "link": 122
         },
         {
           "name": "external_context",
@@ -498,7 +498,7 @@
           "name": "source_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 121
+          "link": 123
         }
       ],
       "outputs": [
@@ -510,7 +510,8 @@
             41,
             46,
             82,
-            99
+            99,
+            112
           ]
         },
         {
@@ -632,7 +633,7 @@
           "name": "source_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 124
+          "link": 126
         }
       ],
       "outputs": [
@@ -1494,7 +1495,7 @@
           "name": "source_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 122
+          "link": 124
         }
       ],
       "outputs": [
@@ -1502,11 +1503,11 @@
           "name": "video_path",
           "type": "STRING",
           "links": [
-            126
+            128
           ]
         }
       ],
-      "title": "ASSEMBLE ALL LOOP SEGMENTS + PADDED SOURCE AUDIO",
+      "title": "ASSEMBLE ALL STREAMED LOOP SEGMENTS + PADDED SOURCE AUDIO",
       "properties": {
         "cnr_id": "comfyui-minimaxh3-contex-loop",
         "ver": "0.3.10",
@@ -1515,7 +1516,7 @@
       },
       "widgets_values": [
         "plan",
-        "character_swap_assembled_617f",
+        "character_swap_assembled_streamed_617f",
         256
       ],
       "color": "#24533a",
@@ -1699,7 +1700,7 @@
         "Node name for S&R": "Note"
       },
       "widgets_values": [
-        "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The first assembled path is 617 inference frames; the green Exact Trim node is the actual 614-frame delivery with original audio."
+        "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The first assembled path is 617 inference frames; the green Exact Trim node is the actual 614-frame delivery with original audio or silence fallback."
       ],
       "color": "#432f66",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -1725,12 +1726,12 @@
           "widget": {
             "name": "generation_fingerprint"
           },
-          "link": 118
+          "link": 120
         },
         {
           "name": "plan_json_input",
           "type": "STRING",
-          "link": 119
+          "link": 121
         }
       ],
       "outputs": [
@@ -1784,7 +1785,7 @@
       },
       "widgets_values": [
         "{\"defaults\":{\"steps\":20},\"shots\":[{\"id\":\"source_01\",\"prompt\":\"subject_definitions:\\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\\n\\nsummary:\\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\\n\\ndetailed_description:\\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\\n\\noverall_soundscape:\\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\\n\\nnon_diegetic_music:\\nN/A - do not generate replacement music; the original source track is muxed after assembly.\",\"length\":124,\"seed\":\"730000\"},{\"id\":\"source_02\",\"prompt\":\"subject_definitions:\\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\\n\\nsummary:\\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\\n\\ndetailed_description:\\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\\n\\noverall_soundscape:\\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\\n\\nnon_diegetic_music:\\nN/A - do not generate replacement music; the original source track is muxed after assembly.\",\"length\":124,\"seed\":\"730001\"},{\"id\":\"source_03\",\"prompt\":\"subject_definitions:\\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\\n\\nsummary:\\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\\n\\ndetailed_description:\\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\\n\\noverall_soundscape:\\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\\n\\nnon_diegetic_music:\\nN/A - do not generate replacement music; the original source track is muxed after assembly.\",\"length\":124,\"seed\":\"730002\"},{\"id\":\"source_04\",\"prompt\":\"subject_definitions:\\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\\n\\nsummary:\\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\\n\\ndetailed_description:\\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\\n\\noverall_soundscape:\\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\\n\\nnon_diegetic_music:\\nN/A - do not generate replacement music; the original source track is muxed after assembly.\",\"length\":124,\"seed\":\"730003\"},{\"id\":\"source_05\",\"prompt\":\"subject_definitions:\\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\\n\\nsummary:\\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\\n\\ndetailed_description:\\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\\n\\noverall_soundscape:\\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\\n\\nnon_diegetic_music:\\nN/A - do not generate replacement music; the original source track is muxed after assembly.\",\"length\":124,\"seed\":\"730004\"},{\"id\":\"source_06\",\"prompt\":\"subject_definitions:\\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\\n\\nsummary:\\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\\n\\nretention_analysis:\\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\\n\\ndetailed_description:\\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\\n\\noverall_soundscape:\\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\\n\\nnon_diegetic_music:\\nN/A - do not generate replacement music; the original source track is muxed after assembly.\",\"length\":107,\"seed\":\"730005\"}]}",
-        "h3_native_loop_9b1c0f6c_614f",
+        "h3_native_loop_streamed_9b1c0f6c_614f",
         "",
         576,
         1024,
@@ -1839,7 +1840,7 @@
           "name": "source_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 125
+          "link": 127
         }
       ],
       "outputs": [
@@ -1900,7 +1901,7 @@
           "name": "source_audio",
           "shape": 7,
           "type": "AUDIO",
-          "link": 123
+          "link": 125
         },
         {
           "name": "external_context",
@@ -2374,7 +2375,9 @@
         {
           "name": "reference_fingerprint",
           "type": "STRING",
-          "links": null
+          "links": [
+            118
+          ]
         },
         {
           "name": "status",
@@ -2416,7 +2419,7 @@
           ]
         }
       ],
-      "title": "INPUT ORIGINAL LONG VIDEO + ORIGINAL AUDIO",
+      "title": "INPUT ORIGINAL LONG VIDEO - AUDIO OPTIONAL",
       "properties": {
         "Node name for S&R": "LoadVideo"
       },
@@ -2448,10 +2451,10 @@
       ],
       "outputs": [
         {
-          "name": "frames_24fps",
-          "type": "IMAGE",
+          "name": "source_timeline",
+          "type": "H3_NATIVE_VIDEO_TIMELINE",
           "links": [
-            112
+            111
           ]
         },
         {
@@ -2459,41 +2462,39 @@
           "type": "AUDIO",
           "links": [
             113,
-            120,
-            121,
             122,
             123,
             124,
-            125
+            125,
+            126,
+            127
           ]
         },
         {
           "name": "source_audio",
           "type": "AUDIO",
           "links": [
-            127
+            129
           ]
         },
         {
           "name": "plan_json",
           "type": "STRING",
           "links": [
-            119
+            121
           ]
         },
         {
           "name": "source_frame_count",
           "type": "INT",
           "links": [
-            128
+            130
           ]
         },
         {
           "name": "inference_frame_count",
           "type": "INT",
-          "links": [
-            111
-          ]
+          "links": null
         },
         {
           "name": "segment_count",
@@ -2504,9 +2505,16 @@
           "name": "status",
           "type": "STRING",
           "links": null
+        },
+        {
+          "name": "source_fingerprint",
+          "type": "STRING",
+          "links": [
+            119
+          ]
         }
       ],
-      "title": "AUTO 24 FPS + FRAME COUNT + SEGMENT PLAN + INFERENCE-ONLY PAD",
+      "title": "STREAM METADATA + AUTO PLAN + AUDIO FALLBACK - NO FULL FRAME BATCH",
       "properties": {
         "Node name for S&R": "H3NativeLongVideoPrepare"
       },
@@ -2522,57 +2530,52 @@
     },
     {
       "id": 1951,
-      "type": "MiniMaxH3ReferenceVideoPrepare",
+      "type": "H3NativeLongVideoScene",
       "pos": [
         -1472,
         544
       ],
       "size": [
         448,
-        256
+        288
       ],
       "flags": {},
       "order": 48,
       "mode": 0,
       "inputs": [
         {
-          "name": "length",
-          "type": "INT",
-          "widget": {
-            "name": "length"
-          },
+          "name": "source_timeline",
+          "type": "H3_NATIVE_VIDEO_TIMELINE",
           "link": 111
         },
         {
-          "name": "source_frames",
-          "shape": 7,
-          "type": "IMAGE",
+          "name": "state",
+          "type": "H3_CHAIN_STATE",
           "link": 112
         },
         {
-          "name": "source_audio",
-          "shape": 7,
+          "name": "inference_audio",
           "type": "AUDIO",
           "link": 113
         }
       ],
       "outputs": [
         {
-          "name": "ref_video",
+          "name": "scene_frames",
           "type": "IMAGE",
           "links": [
             114
           ]
         },
         {
-          "name": "source_audio",
+          "name": "scene_audio",
           "type": "AUDIO",
           "links": [
             115
           ]
         },
         {
-          "name": "length",
+          "name": "source_start_frame",
           "type": "INT",
           "links": null
         },
@@ -2582,15 +2585,12 @@
           "links": null
         }
       ],
-      "title": "FULL PADDED 24 FPS REFERENCE TIMELINE",
+      "title": "CURRENT SOURCE SCENE ONLY - STREAMED EXACT 24 FPS INDICES",
       "properties": {
-        "Node name for S&R": "MiniMaxH3ReferenceVideoPrepare"
+        "Node name for S&R": "H3NativeLongVideoScene"
       },
-      "widgets_values": [
-        617,
-        24.0
-      ],
-      "color": "#1f1f48",
+      "widgets_values": [],
+      "color": "#215c55",
       "bgcolor": "rgba(24,24,27,.9)"
     },
     {
@@ -2637,9 +2637,7 @@
         {
           "name": "reference_fingerprint",
           "type": "STRING",
-          "links": [
-            118
-          ]
+          "links": null
         },
         {
           "name": "status",
@@ -2647,14 +2645,14 @@
           "links": null
         }
       ],
-      "title": "@motion + @motion_audio - SEQUENTIAL SOURCE TIMELINE",
+      "title": "@motion + @motion_audio - CURRENT STREAMED SCENE",
       "properties": {
         "Node name for S&R": "MiniMaxH3TaggedVideoReference"
       },
       "widgets_values": [
         "motion",
         "motion_audio",
-        "sequential"
+        "restart_each_scene"
       ],
       "color": "#744c8c",
       "bgcolor": "rgba(24,24,27,.9)"
@@ -2677,17 +2675,17 @@
         {
           "name": "video_path",
           "type": "STRING",
-          "link": 126
+          "link": 128
         },
         {
           "name": "source_audio",
           "type": "AUDIO",
-          "link": 127
+          "link": 129
         },
         {
           "name": "source_frame_count",
           "type": "INT",
-          "link": 128
+          "link": 130
         }
       ],
       "outputs": [
@@ -2702,12 +2700,12 @@
           "links": null
         }
       ],
-      "title": "FINAL EXACT 614-FRAME TRIM + ORIGINAL SOURCE AUDIO",
+      "title": "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK",
       "properties": {
         "Node name for S&R": "H3FinalTrimToSource"
       },
       "widgets_values": [
-        "character_swap_full_exact_614f",
+        "character_swap_full_exact_streamed_614f",
         24.0,
         256
       ],
@@ -2754,6 +2752,54 @@
       "bgcolor": "rgba(24,24,27,.9)"
     },
     {
+      "id": 1973,
+      "type": "H3NativeGenerationFingerprint",
+      "pos": [
+        -1472,
+        1136
+      ],
+      "size": [
+        448,
+        176
+      ],
+      "flags": {},
+      "order": 52,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "identity_fingerprint",
+          "type": "STRING",
+          "link": 118
+        },
+        {
+          "name": "source_fingerprint",
+          "type": "STRING",
+          "link": 119
+        }
+      ],
+      "outputs": [
+        {
+          "name": "generation_fingerprint",
+          "type": "STRING",
+          "links": [
+            120
+          ]
+        },
+        {
+          "name": "status",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "title": "CHECKPOINT FINGERPRINT - IDENTITY + ENCODED SOURCE FILE",
+      "properties": {
+        "Node name for S&R": "H3NativeGenerationFingerprint"
+      },
+      "widgets_values": [],
+      "color": "#215c55",
+      "bgcolor": "rgba(24,24,27,.9)"
+    },
+    {
       "id": 1968,
       "type": "Note",
       "pos": [
@@ -2774,7 +2820,7 @@
         "Node name for S&R": "Note"
       },
       "widgets_values": [
-        "The source is decoded once, resampled to 24 fps, and counted on the canvas. For the selected 25.6s source: 614 unique frames become 617 inference frames; only three cloned tail frames exist inside Ref2VA input. The recursive plan is 124,124,124,124,124,107 raw frames. Final Exact Trim removes those three inference-only frames and restores the original source audio."
+        "Only source metadata and audio are prepared globally. Every recursive scene decodes its exact 24 fps source window on demand; full source frames stay on disk. For the selected 25.6s source: 614 unique frames become 617 inference frames. Final Exact Trim removes three inference-only tail frames and restores original audio or same-duration silence."
       ],
       "color": "#2d4b58",
       "bgcolor": "rgba(24,24,27,.92)"
@@ -3362,18 +3408,18 @@
     [
       111,
       1960,
-      5,
+      0,
       1951,
       0,
-      "INT"
+      "H3_NATIVE_VIDEO_TIMELINE"
     ],
     [
       112,
-      1960,
+      1702,
       0,
       1951,
       1,
-      "IMAGE"
+      "H3_CHAIN_STATE"
     ],
     [
       113,
@@ -3417,14 +3463,30 @@
     ],
     [
       118,
-      1952,
+      1966,
       1,
-      1700,
+      1973,
       0,
       "STRING"
     ],
     [
       119,
+      1960,
+      8,
+      1973,
+      1,
+      "STRING"
+    ],
+    [
+      120,
+      1973,
+      0,
+      1700,
+      0,
+      "STRING"
+    ],
+    [
+      121,
       1960,
       3,
       1700,
@@ -3432,7 +3494,7 @@
       "STRING"
     ],
     [
-      120,
+      122,
       1960,
       1,
       1701,
@@ -3440,7 +3502,7 @@
       "AUDIO"
     ],
     [
-      121,
+      123,
       1960,
       1,
       1702,
@@ -3448,26 +3510,10 @@
       "AUDIO"
     ],
     [
-      122,
-      1960,
-      1,
-      1706,
-      1,
-      "AUDIO"
-    ],
-    [
-      123,
-      1960,
-      1,
-      1707,
-      1,
-      "AUDIO"
-    ],
-    [
       124,
       1960,
       1,
-      1708,
+      1706,
       1,
       "AUDIO"
     ],
@@ -3475,12 +3521,28 @@
       125,
       1960,
       1,
+      1707,
+      1,
+      "AUDIO"
+    ],
+    [
+      126,
+      1960,
+      1,
+      1708,
+      1,
+      "AUDIO"
+    ],
+    [
+      127,
+      1960,
+      1,
       1944,
       3,
       "AUDIO"
     ],
     [
-      126,
+      128,
       1706,
       0,
       1961,
@@ -3488,7 +3550,7 @@
       "STRING"
     ],
     [
-      127,
+      129,
       1960,
       2,
       1961,
@@ -3496,7 +3558,7 @@
       "AUDIO"
     ],
     [
-      128,
+      130,
       1960,
       4,
       1961,
@@ -3531,7 +3593,7 @@
     },
     {
       "id": 3,
-      "title": "SOURCE VIDEO -> AUTO 24 FPS / AUTO PLAN / SEQUENTIAL REFERENCE",
+      "title": "SOURCE VIDEO -> STREAM METADATA / AUDIO / PLAN - FULL FRAMES STAY ON DISK",
       "bounding": [
         -3072,
         448,
@@ -3543,7 +3605,7 @@
     },
     {
       "id": 4,
-      "title": "VISIBLE RECURSIVE BODY - REF2VA / CONTEXT / SAMPLE / TRIM / SAVE / REVIEW / LOOP",
+      "title": "VISIBLE RECURSIVE BODY - STREAM SCENE / REF2VA / CONTEXT / SAMPLE / TRIM / SAVE / REVIEW / LOOP",
       "bounding": [
         -704,
         -352,
@@ -3623,7 +3685,8 @@
         107
       ],
       "context_frames": 22,
-      "final_exact_trim": true
+      "final_exact_trim": true,
+      "source_loading": "streamed current-scene windows; full source frames remain on disk"
     }
   },
   "version": 0.4

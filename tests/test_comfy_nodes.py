@@ -89,7 +89,8 @@ class ComfyNodeTests(unittest.TestCase):
             set(module.NODE_CLASS_MAPPINGS),
             {
                 "H3ChainConfig", "H3ChainLaunch", "H3ChainStatus",
-                "H3NativeLongVideoPrepare", "H3FinalTrimToSource",
+                "H3NativeGenerationFingerprint", "H3NativeLongVideoPrepare",
+                "H3NativeLongVideoScene", "H3FinalTrimToSource",
                 "H3FullVideoInputs",
                 "H3FullVideoConfig", "H3FullVideoLaunch", "H3FullVideoStatus",
                 "H3FullVideoOneClick",
@@ -125,31 +126,106 @@ class ComfyNodeTests(unittest.TestCase):
         import torch
 
         source_video = mock.Mock()
-        source_video.get_components.return_value = SimpleNamespace(
-            images=torch.ones((30, 2, 2, 3), dtype=torch.float32),
-            audio=None,
-            frame_rate=30.0,
-        )
+        source_video.get_frame_count.return_value = 30
+        source_video.get_frame_rate.return_value = 30.0
+        source_video.get_duration.return_value = 1.0
+        with (
+            mock.patch.object(nodes, "_native_video_fingerprint", return_value="source"),
+            mock.patch.object(nodes, "_decode_native_audio", return_value=None),
+        ):
+            result = nodes.H3NativeLongVideoPrepare().prepare(
+                source_video=source_video,
+                prompt="subject_definitions:\n@motion owns motion.",
+                raw_frames=90,
+                context_frames=22,
+                steps=20,
+                base_seed=730000,
+            )
 
-        result = nodes.H3NativeLongVideoPrepare().prepare(
-            source_video=source_video,
-            prompt="subject_definitions:\n@motion owns motion.",
-            raw_frames=90,
-            context_frames=22,
-            steps=20,
-            base_seed=730000,
-        )
-
-        frames, inference_audio, source_audio = result[:3]
+        timeline, inference_audio, source_audio = result[:3]
         source_frame_count, inference_frame_count = result[4:6]
         self.assertEqual((source_frame_count, inference_frame_count), (24, 39))
-        self.assertEqual(tuple(frames.shape), (39, 2, 2, 3))
+        self.assertEqual(timeline["format"], "h3_native_video_timeline_v2")
+        self.assertIs(timeline["video"], source_video)
+        self.assertNotIn("frames", timeline)
         self.assertEqual(source_audio["sample_rate"], 44100)
         self.assertEqual(source_audio["waveform"].shape[-1], 44100)
         self.assertEqual(source_audio["h3_audio_source"], "silence_fallback")
         self.assertEqual(inference_audio["waveform"].shape[-1], 71662)
         self.assertEqual(torch.count_nonzero(source_audio["waveform"]).item(), 0)
         self.assertIn("audio=missing -> 44.1 kHz mono silence", result[7])
+        source_video.get_components.assert_not_called()
+
+    @unittest.skipUnless(importlib.util.find_spec("torch"), "requires PyTorch")
+    def test_native_scene_decodes_only_the_exact_current_window(self) -> None:
+        import torch
+
+        source_video = mock.Mock()
+        trimmed_video = mock.Mock()
+        source_start = 68
+        length = 90
+        source_fps = 30.0
+        source_indices = (
+            torch.arange(source_start, source_start + length, dtype=torch.float64)
+            * (source_fps / 24.0)
+        ).floor().to(dtype=torch.long)
+        first_source = int(source_indices[0])
+        local_indices = source_indices - first_source
+        decoded_count = int(local_indices.max()) + 1
+        decoded = torch.arange(decoded_count, dtype=torch.float32).reshape(
+            decoded_count, 1, 1, 1
+        ).repeat(1, 2, 2, 3)
+        trimmed_video.get_components.return_value = SimpleNamespace(images=decoded)
+        source_video.as_trimmed.return_value = trimmed_video
+        timeline = {
+            "format": "h3_native_video_timeline_v2",
+            "video": source_video,
+            "source_fps": source_fps,
+            "decoded_frame_count": 300,
+            "source_frame_count": 240,
+            "inference_frame_count": 243,
+        }
+        state = {
+            "index": 2,
+            "plan": {
+                "shots": [
+                    {"generation_start_frame": 0, "raw_frames": 90},
+                    {
+                        "generation_start_frame": source_start,
+                        "raw_frames": length,
+                    },
+                ]
+            },
+        }
+        inference_audio = {
+            "waveform": torch.zeros((1, 1, 500000), dtype=torch.float32),
+            "sample_rate": 44100,
+        }
+
+        frames, scene_audio, actual_start, status = (
+            nodes.H3NativeLongVideoScene().decode(
+                timeline, state, inference_audio
+            )
+        )
+
+        self.assertEqual(actual_start, source_start)
+        self.assertEqual(tuple(frames.shape), (length, 2, 2, 3))
+        self.assertTrue(
+            torch.equal(frames[:, 0, 0, 0], local_indices.to(torch.float32))
+        )
+        sample_start = round(source_start / 24.0 * 44100)
+        sample_end = round((source_start + length) / 24.0 * 44100)
+        self.assertEqual(scene_audio["waveform"].shape[-1], sample_end - sample_start)
+        self.assertIn("scene 2/2", status)
+        source_video.get_components.assert_not_called()
+        source_video.as_trimmed.assert_called_once()
+
+    def test_native_generation_fingerprint_combines_identity_and_source(self) -> None:
+        first = nodes.H3NativeGenerationFingerprint().combine("identity", "source")
+        second = nodes.H3NativeGenerationFingerprint().combine("identity", "source")
+        changed = nodes.H3NativeGenerationFingerprint().combine("identity", "other")
+        self.assertEqual(first[0], second[0])
+        self.assertNotEqual(first[0], changed[0])
 
     def test_final_video_preview_uses_comfy_output_relative_path(self) -> None:
         final = self.output_dir / "h3_chains" / "run" / "final" / "result.mp4"

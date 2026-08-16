@@ -65,9 +65,42 @@ class NativeLoopWorkflowTests(unittest.TestCase):
             if node["type"] == "LoadImage" and "@character_" in node.get("title", "")
         ]
         self.assertEqual(len(images), 4)
+        scene = self.nodes[1951]
+        self.assertEqual(scene["type"], "H3NativeLongVideoScene")
         video_tag = self.nodes[1952]
-        self.assertEqual(video_tag["widgets_values"], ["motion", "motion_audio", "sequential"])
+        self.assertEqual(
+            video_tag["widgets_values"],
+            ["motion", "motion_audio", "restart_each_scene"],
+        )
         self.assertTrue(self.links_to(1700, "plan_json_input"))
+
+    def test_only_current_scene_is_decoded_from_source_timeline(self) -> None:
+        prepare = self.nodes[1960]
+        self.assertEqual(prepare["type"], "H3NativeLongVideoPrepare")
+        self.assertEqual(prepare["outputs"][0]["type"], "H3_NATIVE_VIDEO_TIMELINE")
+        scene_timeline = self.links_to(1951, "source_timeline")
+        self.assertEqual(
+            (int(scene_timeline[0][1]), int(scene_timeline[0][2])),
+            (1960, 0),
+        )
+        scene_state = self.links_to(1951, "state")
+        self.assertEqual((int(scene_state[0][1]), int(scene_state[0][2])), (1702, 0))
+        self.assertFalse(
+            any(
+                output["type"] == "IMAGE"
+                for output in prepare.get("outputs", [])
+            )
+        )
+
+    def test_checkpoint_fingerprint_includes_identity_and_source_file(self) -> None:
+        fingerprint = self.nodes[1973]
+        self.assertEqual(fingerprint["type"], "H3NativeGenerationFingerprint")
+        identity = self.links_to(1973, "identity_fingerprint")
+        source = self.links_to(1973, "source_fingerprint")
+        plan = self.links_to(1700, "generation_fingerprint")
+        self.assertEqual((int(identity[0][1]), int(identity[0][2])), (1966, 1))
+        self.assertEqual((int(source[0][1]), int(source[0][2])), (1960, 8))
+        self.assertEqual((int(plan[0][1]), int(plan[0][2])), (1973, 0))
 
     def test_incompatible_loras_are_disconnected_and_disabled(self) -> None:
         lora_ids = {

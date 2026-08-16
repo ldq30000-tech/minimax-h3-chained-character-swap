@@ -11,7 +11,9 @@ from .nodes import (
     H3FullVideoLaunch,
     H3FullVideoOneClick,
     H3FullVideoStatus,
+    H3NativeGenerationFingerprint,
     H3NativeLongVideoPrepare,
+    H3NativeLongVideoScene,
 )
 
 
@@ -19,7 +21,9 @@ NODE_CLASS_MAPPINGS = {
     "H3ChainConfig": H3ChainConfig,
     "H3ChainLaunch": H3ChainLaunch,
     "H3ChainStatus": H3ChainStatus,
+    "H3NativeGenerationFingerprint": H3NativeGenerationFingerprint,
     "H3NativeLongVideoPrepare": H3NativeLongVideoPrepare,
+    "H3NativeLongVideoScene": H3NativeLongVideoScene,
     "H3FinalTrimToSource": H3FinalTrimToSource,
     "H3FullVideoInputs": H3FullVideoInputs,
     "H3FullVideoConfig": H3FullVideoConfig,
@@ -33,7 +37,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "H3ChainConfig": "H3 Chain Config",
     "H3ChainLaunch": "H3 Chain Launch",
     "H3ChainStatus": "H3 Chain Status",
-    "H3NativeLongVideoPrepare": "H3 Native Long Video Plan + Pad",
+    "H3NativeGenerationFingerprint": "H3 Native Identity + Source Fingerprint",
+    "H3NativeLongVideoPrepare": "H3 Native Long Video Stream Plan",
+    "H3NativeLongVideoScene": "H3 Native Stream Current Scene",
     "H3FinalTrimToSource": "H3 Final Exact Trim + Source Audio",
     "H3FullVideoInputs": "H3 Full Video Inputs",
     "H3FullVideoConfig": "H3 Full Video Config",

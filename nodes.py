@@ -8,6 +8,8 @@ starts a separate controller process and returns immediately.
 from __future__ import annotations
 
 import json
+import hashlib
+import io
 import math
 import os
 import shutil
@@ -29,6 +31,8 @@ RUNNER = ROOT / "scripts" / "run_chain.py"
 FULL_VIDEO_RUNNER = ROOT / "scripts" / "run_full_video.py"
 WORKER = ROOT / "comfy_worker.py"
 CONTROLLERS: dict[int, subprocess.Popen[Any]] = {}
+SOURCE_FINGERPRINT_CACHE: dict[tuple[str, int, int, float, float], str] = {}
+SOURCE_AUDIO_CACHE: dict[str, tuple[Any, int] | None] = {}
 
 
 class H3ChainNodeError(RuntimeError):
@@ -231,13 +235,169 @@ def _video_preview_item(path: Path) -> dict[str, str] | None:
     }
 
 
+def _native_video_metadata(source_video: Any) -> tuple[int, float, float]:
+    """Read timing metadata without materializing the source frame tensor."""
+    getters = {
+        "frame count": getattr(source_video, "get_frame_count", None),
+        "frame rate": getattr(source_video, "get_frame_rate", None),
+        "duration": getattr(source_video, "get_duration", None),
+    }
+    missing = [name for name, value in getters.items() if not callable(value)]
+    if missing:
+        raise H3ChainNodeError(
+            "source VIDEO does not support streamed metadata (%s); update "
+            "ComfyUI before running the low-memory workflow" % ", ".join(missing)
+        )
+    try:
+        frame_count = int(getters["frame count"]())
+        frame_rate = float(getters["frame rate"]())
+        duration = float(getters["duration"]())
+    except Exception as exc:
+        raise H3ChainNodeError(f"cannot read source video metadata: {exc}") from exc
+    if frame_count < 1:
+        raise H3ChainNodeError("source video contains no frames")
+    if not math.isfinite(frame_rate) or frame_rate <= 0:
+        raise H3ChainNodeError("source video frame rate must be positive")
+    if not math.isfinite(duration) or duration <= 0:
+        raise H3ChainNodeError("source video duration must be positive")
+    return frame_count, frame_rate, duration
+
+
+def _native_video_stream(source_video: Any) -> Any:
+    getter = getattr(source_video, "get_stream_source", None)
+    if not callable(getter):
+        raise H3ChainNodeError(
+            "source VIDEO does not expose a stream source; update ComfyUI before "
+            "running the low-memory workflow"
+        )
+    try:
+        source = getter()
+    except Exception as exc:
+        raise H3ChainNodeError(f"cannot open source video stream: {exc}") from exc
+    if isinstance(source, (str, os.PathLike)):
+        path = Path(source).expanduser().resolve()
+        if not path.is_file():
+            raise H3ChainNodeError(f"source video stream does not exist: {path}")
+        return path
+    if not callable(getattr(source, "read", None)):
+        raise H3ChainNodeError("source video stream must be a file path or byte stream")
+    return source
+
+
+def _native_video_fingerprint(source_video: Any) -> str:
+    """Hash the encoded source incrementally so checkpoint lineage stays stable."""
+    source = _native_video_stream(source_video)
+    trim_getter = getattr(source_video, "get_active_trim_window", None)
+    start_time, duration = (0.0, 0.0)
+    if callable(trim_getter):
+        start_time, duration = (float(value) for value in trim_getter())
+    digest = hashlib.sha256()
+    digest.update(f"trim:{start_time:.9f}:{duration:.9f}\n".encode("ascii"))
+    if isinstance(source, Path):
+        stat = source.stat()
+        key = (str(source), stat.st_size, stat.st_mtime_ns, start_time, duration)
+        cached = SOURCE_FINGERPRINT_CACHE.get(key)
+        if cached is not None:
+            return cached
+        with source.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(4 * 1024 * 1024), b""):
+                digest.update(chunk)
+        fingerprint = digest.hexdigest()
+        SOURCE_FINGERPRINT_CACHE[key] = fingerprint
+        return fingerprint
+
+    position = source.tell() if callable(getattr(source, "tell", None)) else None
+    try:
+        if callable(getattr(source, "seek", None)):
+            source.seek(0)
+        for chunk in iter(lambda: source.read(4 * 1024 * 1024), b""):
+            digest.update(chunk)
+    finally:
+        if position is not None and callable(getattr(source, "seek", None)):
+            source.seek(position)
+    return digest.hexdigest()
+
+
+def _decode_native_audio(source_video: Any, fingerprint: str) -> tuple[Any, int] | None:
+    """Decode only audio packets; video frames remain on disk."""
+    if fingerprint in SOURCE_AUDIO_CACHE:
+        return SOURCE_AUDIO_CACHE[fingerprint]
+    try:
+        import av
+        import numpy as np
+        import torch
+    except ImportError as exc:
+        raise H3ChainNodeError(
+            "PyAV, NumPy, and PyTorch are required for streamed source audio"
+        ) from exc
+
+    source = _native_video_stream(source_video)
+    if isinstance(source, Path):
+        source = str(source)
+    elif isinstance(source, io.BytesIO):
+        source.seek(0)
+    try:
+        with av.open(source, mode="r") as container:
+            if not container.streams.audio:
+                SOURCE_AUDIO_CACHE[fingerprint] = None
+                return None
+            audio_stream = container.streams.audio[0]
+            resampler = av.audio.resampler.AudioResampler(format="fltp")
+            chunks = []
+            sample_rate = int(audio_stream.rate or 0)
+            for packet in container.demux(audio_stream):
+                for decoded in packet.decode():
+                    for frame in resampler.resample(decoded):
+                        sample_rate = int(frame.sample_rate or sample_rate)
+                        chunks.append(np.asarray(frame.to_ndarray()))
+            for frame in resampler.resample(None):
+                sample_rate = int(frame.sample_rate or sample_rate)
+                chunks.append(np.asarray(frame.to_ndarray()))
+    except Exception as exc:
+        raise H3ChainNodeError(f"cannot decode source audio stream: {exc}") from exc
+    if not chunks or sample_rate < 1:
+        SOURCE_AUDIO_CACHE[fingerprint] = None
+        return None
+    waveform = torch.from_numpy(np.concatenate(chunks, axis=-1)).unsqueeze(0).float()
+    trim_getter = getattr(source_video, "get_active_trim_window", None)
+    start_time, duration = (0.0, 0.0)
+    if callable(trim_getter):
+        start_time, duration = (float(value) for value in trim_getter())
+    sample_start = max(0, int(round(start_time * sample_rate)))
+    sample_end = int(waveform.shape[-1])
+    if duration > 0:
+        sample_end = min(sample_end, sample_start + int(round(duration * sample_rate)))
+    waveform = waveform[..., sample_start:sample_end].contiguous()
+    decoded_audio = (waveform, sample_rate)
+    SOURCE_AUDIO_CACHE[fingerprint] = decoded_audio
+    return decoded_audio
+
+
+def _slice_timeline_audio(audio: Any, start_frame: int, length: int) -> dict[str, Any]:
+    waveform, sample_rate = _audio_waveform(audio, "streamed source audio")
+    sample_start = int(round(start_frame / 24.0 * sample_rate))
+    sample_end = int(round((start_frame + length) / 24.0 * sample_rate))
+    if sample_start < 0 or sample_end > int(waveform.shape[-1]):
+        raise H3ChainNodeError(
+            f"streamed source audio window {sample_start}:{sample_end} exceeds "
+            f"{int(waveform.shape[-1])} samples"
+        )
+    return {
+        "waveform": waveform[..., sample_start:sample_end],
+        "sample_rate": sample_rate,
+    }
+
+
 class H3NativeLongVideoPrepare:
-    """Normalize one native video and build the visible recursive scene plan."""
+    """Build a long-video plan without materializing the full frame timeline."""
 
     CATEGORY = "H3 Chain/Native Loop"
-    RETURN_TYPES = ("IMAGE", "AUDIO", "AUDIO", "STRING", "INT", "INT", "INT", "STRING")
+    RETURN_TYPES = (
+        "H3_NATIVE_VIDEO_TIMELINE", "AUDIO", "AUDIO", "STRING", "INT",
+        "INT", "INT", "STRING", "STRING",
+    )
     RETURN_NAMES = (
-        "frames_24fps",
+        "source_timeline",
         "inference_audio",
         "source_audio",
         "plan_json",
@@ -245,6 +405,7 @@ class H3NativeLongVideoPrepare:
         "inference_frame_count",
         "segment_count",
         "status",
+        "source_fingerprint",
     )
     FUNCTION = "prepare"
 
@@ -269,47 +430,27 @@ class H3NativeLongVideoPrepare:
         context_frames: int,
         steps: int,
         base_seed: int,
-    ) -> tuple[Any, dict[str, Any], dict[str, Any], str, int, int, int, str]:
-        get_components = getattr(source_video, "get_components", None)
-        if not callable(get_components):
-            raise H3ChainNodeError("source_video must come from ComfyUI's native Load Video node")
-        try:
-            components = get_components()
-        except Exception as exc:
-            raise H3ChainNodeError(f"cannot decode source video: {exc}") from exc
-        frames = getattr(components, "images", None)
-        source_audio = getattr(components, "audio", None)
-        try:
-            source_fps = float(getattr(components, "frame_rate"))
-        except (TypeError, ValueError) as exc:
-            raise H3ChainNodeError("source video has no valid frame rate") from exc
-        if getattr(frames, "ndim", None) != 4 or int(frames.shape[0]) < 1:
-            raise H3ChainNodeError("decoded source video did not return an IMAGE frame batch")
-        if not math.isfinite(source_fps) or source_fps <= 0:
-            raise H3ChainNodeError("source video frame rate must be positive")
-
+    ) -> tuple[Any, dict[str, Any], dict[str, Any], str, int, int, int, str, str]:
         try:
             import torch
         except ImportError as exc:
             raise H3ChainNodeError("PyTorch is required to prepare the H3 source timeline") from exc
 
-        source_frame_count = max(1, int(round(int(frames.shape[0]) / source_fps * 24.0)))
-        indices = (
-            torch.arange(source_frame_count, dtype=torch.float64)
-            * (source_fps / 24.0)
-        ).floor().to(dtype=torch.long).clamp(min=0, max=int(frames.shape[0]) - 1)
-        normalized = frames.index_select(0, indices.to(device=frames.device))
+        decoded_frame_count, source_fps, source_duration = _native_video_metadata(
+            source_video
+        )
+        source_frame_count = max(
+            1, int(round(decoded_frame_count / source_fps * 24.0))
+        )
+        source_fingerprint = _native_video_fingerprint(source_video)
 
         plan, padding = _native_loop_plan(
             source_frame_count, prompt, raw_frames, context_frames, steps, base_seed
         )
         inference_frame_count = source_frame_count + padding
-        if padding:
-            normalized = torch.cat(
-                [normalized, normalized[-1:].repeat((padding, 1, 1, 1))], dim=0
-            )
 
-        if source_audio is None:
+        decoded_audio = _decode_native_audio(source_video, source_fingerprint)
+        if decoded_audio is None:
             sample_rate = 44100
             source_samples = max(
                 1, int(round(source_frame_count / 24.0 * sample_rate))
@@ -319,9 +460,7 @@ class H3NativeLongVideoPrepare:
             )
             audio_status = "audio=missing -> 44.1 kHz mono silence"
         else:
-            source_waveform, sample_rate = _audio_waveform(
-                source_audio, "source video audio"
-            )
+            source_waveform, sample_rate = decoded_audio
             audio_status = f"audio=source {sample_rate} Hz"
 
         waveform = source_waveform
@@ -335,17 +474,28 @@ class H3NativeLongVideoPrepare:
         original_audio = {
             "waveform": source_waveform.clone(),
             "sample_rate": sample_rate,
-            "h3_audio_source": "silence_fallback" if source_audio is None else "source",
+            "h3_audio_source": "silence_fallback" if decoded_audio is None else "source",
+        }
+        timeline = {
+            "format": "h3_native_video_timeline_v2",
+            "video": source_video,
+            "source_fps": source_fps,
+            "source_duration": source_duration,
+            "decoded_frame_count": decoded_frame_count,
+            "source_frame_count": source_frame_count,
+            "inference_frame_count": inference_frame_count,
+            "padding_frames": padding,
+            "fingerprint": source_fingerprint,
         }
         lengths = [shot["length"] for shot in plan["shots"]]
         status = (
-            f"{int(frames.shape[0])} frames at {source_fps:.6g} fps -> "
+            f"streamed metadata: {decoded_frame_count} frames at {source_fps:.6g} fps -> "
             f"{source_frame_count} unique frames at 24 fps; scenes={lengths}; "
             f"inference={inference_frame_count} frames; end padding={padding} frames; "
-            f"{audio_status}"
+            f"{audio_status}; full source frames remain on disk"
         )
         return (
-            normalized,
+            timeline,
             inference_audio,
             original_audio,
             json.dumps(plan, ensure_ascii=False, indent=2),
@@ -353,7 +503,148 @@ class H3NativeLongVideoPrepare:
             inference_frame_count,
             len(lengths),
             status,
+            source_fingerprint,
         )
+
+
+class H3NativeLongVideoScene:
+    """Decode only the current Plan scene from a native source timeline."""
+
+    CATEGORY = "H3 Chain/Native Loop"
+    RETURN_TYPES = ("IMAGE", "AUDIO", "INT", "STRING")
+    RETURN_NAMES = ("scene_frames", "scene_audio", "source_start_frame", "status")
+    FUNCTION = "decode"
+
+    @classmethod
+    def INPUT_TYPES(cls) -> dict[str, dict[str, Any]]:
+        return {
+            "required": {
+                "source_timeline": ("H3_NATIVE_VIDEO_TIMELINE",),
+                "state": ("H3_CHAIN_STATE",),
+                "inference_audio": ("AUDIO",),
+            }
+        }
+
+    def decode(
+        self,
+        source_timeline: Any,
+        state: Any,
+        inference_audio: Any,
+    ) -> tuple[Any, dict[str, Any], int, str]:
+        if not isinstance(source_timeline, dict) or source_timeline.get(
+            "format"
+        ) != "h3_native_video_timeline_v2":
+            raise H3ChainNodeError("invalid streamed H3 source timeline")
+        if not isinstance(state, dict) or not isinstance(state.get("plan"), dict):
+            raise H3ChainNodeError("streamed scene requires H3 Chain Current state")
+        try:
+            import torch
+        except ImportError as exc:
+            raise H3ChainNodeError("PyTorch is required to decode an H3 source scene") from exc
+
+        index = int(state.get("index", 0))
+        shots = state["plan"].get("shots")
+        if not isinstance(shots, list) or index < 1 or index > len(shots):
+            raise H3ChainNodeError(f"invalid H3 scene index {index}")
+        shot = shots[index - 1]
+        source_start = int(shot.get("generation_start_frame", -1))
+        length = int(shot.get("raw_frames", -1))
+        source_frame_count = int(source_timeline["source_frame_count"])
+        inference_frame_count = int(source_timeline["inference_frame_count"])
+        decoded_frame_count = int(source_timeline["decoded_frame_count"])
+        source_fps = float(source_timeline["source_fps"])
+        if source_start < 0 or length < 1 or source_start + length > inference_frame_count:
+            raise H3ChainNodeError(
+                f"scene {index} source window {source_start}:{source_start + length} "
+                f"exceeds inference timeline {inference_frame_count}"
+            )
+
+        normalized_indices = torch.arange(
+            source_start, source_start + length, dtype=torch.float64
+        ).clamp(max=source_frame_count - 1)
+        source_indices = (
+            normalized_indices * (source_fps / 24.0)
+        ).floor().to(dtype=torch.long).clamp(max=decoded_frame_count - 1)
+        first_source = int(source_indices[0])
+        last_source = int(source_indices[-1])
+        relative_indices = source_indices - first_source
+        video = source_timeline["video"]
+        trimmer = getattr(video, "as_trimmed", None)
+        if not callable(trimmer):
+            raise H3ChainNodeError(
+                "source VIDEO does not support streamed trimming; update ComfyUI"
+            )
+        duration = (last_source - first_source + 1) / source_fps
+        try:
+            trimmed = trimmer(first_source / source_fps, duration, False)
+            if trimmed is None:
+                raise H3ChainNodeError(
+                    f"cannot trim source frames {first_source}:{last_source + 1}"
+                )
+            components = trimmed.get_components()
+        except H3ChainNodeError:
+            raise
+        except Exception as exc:
+            raise H3ChainNodeError(
+                f"cannot decode streamed source scene {index}: {exc}"
+            ) from exc
+        frames = getattr(components, "images", None)
+        if getattr(frames, "ndim", None) != 4 or int(frames.shape[0]) < 1:
+            raise H3ChainNodeError(
+                f"streamed source scene {index} returned no IMAGE frames"
+            )
+        required_local = int(relative_indices.max()) + 1
+        if int(frames.shape[0]) < required_local:
+            raise H3ChainNodeError(
+                f"streamed source scene {index} decoded {int(frames.shape[0])} "
+                f"frames but exact source indices require {required_local}; "
+                "unique source timestamps will not be duplicated"
+            )
+        selected = frames.index_select(
+            0, relative_indices.to(device=frames.device)
+        )
+        scene_audio = _slice_timeline_audio(inference_audio, source_start, length)
+        mib = int(selected.numel()) * int(selected.element_size()) / (1024 * 1024)
+        status = (
+            f"scene {index}/{len(shots)}: timeline {source_start}:{source_start + length}; "
+            f"decoded source {first_source}:{last_source + 1}; "
+            f"resident scene batch={mib:.1f} MiB"
+        )
+        return selected, scene_audio, source_start, status
+
+
+class H3NativeGenerationFingerprint:
+    """Combine static identity and encoded source fingerprints for checkpoints."""
+
+    CATEGORY = "H3 Chain/Native Loop"
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("generation_fingerprint", "status")
+    FUNCTION = "combine"
+
+    @classmethod
+    def INPUT_TYPES(cls) -> dict[str, dict[str, Any]]:
+        return {
+            "required": {
+                "identity_fingerprint": ("STRING", {"forceInput": True}),
+                "source_fingerprint": ("STRING", {"forceInput": True}),
+            }
+        }
+
+    def combine(
+        self, identity_fingerprint: str, source_fingerprint: str
+    ) -> tuple[str, str]:
+        identity = str(identity_fingerprint or "").strip()
+        source = str(source_fingerprint or "").strip()
+        if not identity or not source:
+            raise H3ChainNodeError("identity and source fingerprints are required")
+        value = hashlib.sha256(
+            json.dumps(
+                {"identity": identity, "source_video": source},
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return value, f"identity + streamed source: {value[:12]}"
 
 
 class H3FinalTrimToSource:

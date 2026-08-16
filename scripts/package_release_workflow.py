@@ -73,7 +73,9 @@ def _genericize(workflow: dict[str, Any]) -> None:
 
     prepare = _node(workflow, 1960)
     _node(workflow, 1950)["title"] = "INPUT ORIGINAL LONG VIDEO - AUDIO OPTIONAL"
-    prepare["title"] = "AUTO 24 FPS + PLAN + PAD + SILENCE FALLBACK"
+    prepare["title"] = (
+        "STREAM METADATA + AUTO PLAN + AUDIO FALLBACK - NO FULL FRAME BATCH"
+    )
     prompt = str(prepare["widgets_values"][0])
     raw_lengths = [124, 124, 124, 124, 124, 107]
     placeholder_plan = {
@@ -93,7 +95,7 @@ def _genericize(workflow: dict[str, Any]) -> None:
     plan_values[0] = json.dumps(
         placeholder_plan, ensure_ascii=False, separators=(",", ":")
     )
-    plan_values[1] = "h3_native_loop_release"
+    plan_values[1] = "h3_native_loop_streamed_release"
     plan["widgets_values"] = plan_values
     plan["title"] = "AUTO PLAN - DYNAMIC SOURCE FRAME COUNT"
 
@@ -107,7 +109,7 @@ def _genericize(workflow: dict[str, Any]) -> None:
     ]
     _node(workflow, 1706)["widgets_values"] = [
         "plan",
-        "character_swap_assembled",
+        "character_swap_assembled_streamed",
         256,
     ]
     _node(workflow, 1708)["widgets_values"] = [
@@ -119,7 +121,7 @@ def _genericize(workflow: dict[str, Any]) -> None:
     final["title"] = (
         "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK"
     )
-    final["widgets_values"] = ["character_swap_full_exact", 24.0, 256]
+    final["widgets_values"] = ["character_swap_full_exact_streamed", 24.0, 256]
 
     note_text = {
         1932: (
@@ -128,11 +130,11 @@ def _genericize(workflow: dict[str, Any]) -> None:
             "actual source-length delivery with original audio or silence fallback."
         ),
         1968: (
-            "The source is decoded once, resampled to 24 fps, and counted on "
-            "the canvas. H3-valid segment lengths and inference-only tail "
-            "padding are computed automatically. Final Exact Trim removes "
-            "inference-only frames and restores original source audio, or "
-            "same-duration silence when no decodable audio track exists."
+            "Only source metadata and audio are prepared globally. Every "
+            "recursive scene decodes its exact 24 fps source window on demand, "
+            "so full source frames remain on disk. H3-valid lengths and "
+            "inference-only tail padding are computed automatically. Final "
+            "Exact Trim restores original audio or same-duration silence."
         ),
     }
     for node_id, text in note_text.items():
@@ -150,6 +152,7 @@ def _genericize(workflow: dict[str, Any]) -> None:
         "model_weights_included": False,
         "source_workflow": "user final canvas",
         "missing_audio": "same-duration 44.1 kHz mono silence fallback",
+        "source_loading": "streamed current-scene windows",
     }
 
 

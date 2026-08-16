@@ -174,7 +174,12 @@ def _note(node_id: int, pos: list[int], size: list[int], title: str, text: str) 
 
 def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict[str, Any]:
     workflow = json.loads(base_workflow.read_text(encoding="utf-8"))
-    replace_ids = {1945, 1946, 1947, 1948, 1950, 1951, 1952}
+    # Rebuilding an already-published canvas must replace the generated input,
+    # streaming, fingerprint, and note nodes instead of duplicating their IDs.
+    replace_ids = {
+        1945, 1946, 1947, 1948, 1950, 1951, 1952,
+        1960, 1961, 1962, 1963, 1964, 1965, 1966, 1968, 1969, 1973,
+    }
     _drop_links_touching(workflow, replace_ids | {1635})
     workflow["nodes"] = [
         node for node in workflow["nodes"] if int(node["id"]) not in replace_ids
@@ -207,7 +212,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     plan["title"] = "AUTO PLAN - SOURCE FRAMES -> 6 SCENES / 617 INFERENCE FRAMES"
     plan["widgets_values"] = [
         json.dumps(placeholder_plan, ensure_ascii=False, separators=(",", ":")),
-        "h3_native_loop_9b1c0f6c_614f",
+        "h3_native_loop_streamed_9b1c0f6c_614f",
         "",
         576,
         1024,
@@ -232,8 +237,8 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     review = _node(workflow, 1944)
     review["title"] = "VISIBLE REVIEW GATE - DISABLED FOR ONE-QUEUE AUTO RUN"
     review["widgets_values"] = [False, False, 0, False, True, "checkpointed"]
-    _node(workflow, 1706)["widgets_values"] = ["plan", "character_swap_assembled_617f", 256]
-    _node(workflow, 1706)["title"] = "ASSEMBLE ALL LOOP SEGMENTS + PADDED SOURCE AUDIO"
+    _node(workflow, 1706)["widgets_values"] = ["plan", "character_swap_assembled_streamed_617f", 256]
+    _node(workflow, 1706)["title"] = "ASSEMBLE ALL STREAMED LOOP SEGMENTS + PADDED SOURCE AUDIO"
     _node(workflow, 1708)["widgets_values"] = ["plan", "character_swap_recovered_617f", 256]
     _node(workflow, 1701)["title"] = "LOOP START - RUN ALL AUTO-PLANNED SCENES"
     _node(workflow, 1702)["title"] = "CURRENT SOURCE SLICE - SEQUENTIAL, NEVER RESTART FRAME 0"
@@ -245,16 +250,20 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     _node(workflow, 110)["title"] = "TAGGED REF2VA - FOUR IDENTITY IMAGES + CURRENT SOURCE SLICE"
     _node(workflow, 110)["widgets_values"] = [PROMPT, 576, 1024, 124, "match", "strict"]
 
-    disabled_lora = _node(workflow, 1635)
-    disabled_lora.update({
-        "pos": [-1360, -1050],
-        "mode": 2,
-        "inputs": [{"name": "model", "type": "MODEL", "link": None}],
-        "title": "DISABLED - Turbo 4 STEPS / INCOMPATIBLE WITH PRUNED BASE",
-        "widgets_values": ["minimax\\minimax_h3_turbo_4STEPS_comfyui.safetensors", 1.0],
-        "color": "#6b3030",
-        "bgcolor": "rgba(24,24,27,.9)",
-    })
+    disabled_lora = next(
+        (node for node in workflow["nodes"] if int(node["id"]) == 1635),
+        None,
+    )
+    if disabled_lora is not None:
+        disabled_lora.update({
+            "pos": [-1360, -1050],
+            "mode": 2,
+            "inputs": [{"name": "model", "type": "MODEL", "link": None}],
+            "title": "DISABLED - Turbo 4 STEPS / INCOMPATIBLE WITH PRUNED BASE",
+            "widgets_values": ["minimax\\minimax_h3_turbo_4STEPS_comfyui.safetensors", 1.0],
+            "color": "#6b3030",
+            "bgcolor": "rgba(24,24,27,.9)",
+        })
 
     new_nodes = [
         _load_image(1945, -4864, image_names[0], "1 - INPUT @character_front", 38),
@@ -289,7 +298,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
             "mode": 0,
             "inputs": [{"name": "source_video", "type": "VIDEO", "link": None}],
             "outputs": [
-                {"name": "frames_24fps", "type": "IMAGE", "links": None},
+                {"name": "source_timeline", "type": "H3_NATIVE_VIDEO_TIMELINE", "links": None},
                 {"name": "inference_audio", "type": "AUDIO", "links": None},
                 {"name": "source_audio", "type": "AUDIO", "links": None},
                 {"name": "plan_json", "type": "STRING", "links": None},
@@ -297,8 +306,9 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
                 {"name": "inference_frame_count", "type": "INT", "links": None},
                 {"name": "segment_count", "type": "INT", "links": None},
                 {"name": "status", "type": "STRING", "links": None},
+                {"name": "source_fingerprint", "type": "STRING", "links": None},
             ],
-            "title": "AUTO 24 FPS + PLAN + PAD + SILENCE FALLBACK",
+            "title": "STREAM METADATA + AUTO PLAN + AUDIO FALLBACK - NO FULL FRAME BATCH",
             "properties": {"Node name for S&R": "H3NativeLongVideoPrepare"},
             "widgets_values": [PROMPT, 124, 22, 20, 730000],
             "color": "#215c55",
@@ -306,27 +316,27 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
         },
         {
             "id": 1951,
-            "type": "MiniMaxH3ReferenceVideoPrepare",
+            "type": "H3NativeLongVideoScene",
             "pos": [-1472, 544],
-            "size": [448, 256],
+            "size": [448, 288],
             "flags": {},
             "order": 48,
             "mode": 0,
             "inputs": [
-                {"name": "length", "type": "INT", "widget": {"name": "length"}, "link": None},
-                {"name": "source_frames", "shape": 7, "type": "IMAGE", "link": None},
-                {"name": "source_audio", "shape": 7, "type": "AUDIO", "link": None},
+                {"name": "source_timeline", "type": "H3_NATIVE_VIDEO_TIMELINE", "link": None},
+                {"name": "state", "type": "H3_CHAIN_STATE", "link": None},
+                {"name": "inference_audio", "type": "AUDIO", "link": None},
             ],
             "outputs": [
-                {"name": "ref_video", "type": "IMAGE", "links": None},
-                {"name": "source_audio", "type": "AUDIO", "links": None},
-                {"name": "length", "type": "INT", "links": None},
+                {"name": "scene_frames", "type": "IMAGE", "links": None},
+                {"name": "scene_audio", "type": "AUDIO", "links": None},
+                {"name": "source_start_frame", "type": "INT", "links": None},
                 {"name": "status", "type": "STRING", "links": None},
             ],
-            "title": "FULL PADDED 24 FPS REFERENCE TIMELINE",
-            "properties": {"Node name for S&R": "MiniMaxH3ReferenceVideoPrepare"},
-            "widgets_values": [617, 24.0],
-            "color": "#1f1f48",
+            "title": "CURRENT SOURCE SCENE ONLY - STREAMED EXACT 24 FPS INDICES",
+            "properties": {"Node name for S&R": "H3NativeLongVideoScene"},
+            "widgets_values": [],
+            "color": "#215c55",
             "bgcolor": "rgba(24,24,27,.9)",
         },
         {
@@ -347,9 +357,9 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
                 {"name": "reference_fingerprint", "type": "STRING", "links": None},
                 {"name": "status", "type": "STRING", "links": None},
             ],
-            "title": "@motion + @motion_audio - SEQUENTIAL SOURCE TIMELINE",
+            "title": "@motion + @motion_audio - CURRENT STREAMED SCENE",
             "properties": {"Node name for S&R": "MiniMaxH3TaggedVideoReference"},
-            "widgets_values": ["motion", "motion_audio", "sequential"],
+            "widgets_values": ["motion", "motion_audio", "restart_each_scene"],
             "color": "#744c8c",
             "bgcolor": "rgba(24,24,27,.9)",
         },
@@ -372,7 +382,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
             ],
             "title": "FINAL PLAYABLE PREVIEW + EXACT SOURCE-FRAME TRIM + AUDIO FALLBACK",
             "properties": {"Node name for S&R": "H3FinalTrimToSource"},
-            "widgets_values": ["character_swap_full_exact_614f", 24.0, 256],
+            "widgets_values": ["character_swap_full_exact_streamed_614f", 24.0, 256],
             "color": "#24533a",
             "bgcolor": "rgba(24,24,27,.96)",
         },
@@ -392,12 +402,34 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
             "color": "#6b3030",
             "bgcolor": "rgba(24,24,27,.9)",
         },
+        {
+            "id": 1973,
+            "type": "H3NativeGenerationFingerprint",
+            "pos": [-1472, 1136],
+            "size": [448, 176],
+            "flags": {},
+            "order": 52,
+            "mode": 0,
+            "inputs": [
+                {"name": "identity_fingerprint", "type": "STRING", "link": None},
+                {"name": "source_fingerprint", "type": "STRING", "link": None},
+            ],
+            "outputs": [
+                {"name": "generation_fingerprint", "type": "STRING", "links": None},
+                {"name": "status", "type": "STRING", "links": None},
+            ],
+            "title": "CHECKPOINT FINGERPRINT - IDENTITY + ENCODED SOURCE FILE",
+            "properties": {"Node name for S&R": "H3NativeGenerationFingerprint"},
+            "widgets_values": [],
+            "color": "#215c55",
+            "bgcolor": "rgba(24,24,27,.9)",
+        },
         _note(
             1968,
             [-3008, 1480],
             [1472, 320],
             "DYNAMIC SOURCE PLAN",
-            "The source is decoded once, resampled to 24 fps, and counted on the canvas. For the selected 25.6s source: 614 unique frames become 617 inference frames; only three cloned tail frames exist inside Ref2VA input. The recursive plan is 124,124,124,124,124,107 raw frames. Final Exact Trim removes those three inference-only frames and restores the original source audio, or same-duration silence when no audio track exists.",
+            "Only source metadata and audio are prepared globally. Every recursive scene decodes its exact 24 fps source window on demand; full source frames stay on disk. For the selected 25.6s source: 614 unique frames become 617 inference frames. Final Exact Trim removes three inference-only tail frames and restores original audio or same-duration silence.",
         ),
         _note(
             1969,
@@ -418,14 +450,16 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     _connect(workflow, 1964, 0, 1966, "image", "IMAGE")
     _connect(workflow, 1965, 0, 1966, "previous", "H3_TAGGED_REFERENCES")
     _connect(workflow, 1950, 0, 1960, "source_video", "VIDEO")
-    _connect(workflow, 1960, 5, 1951, "length", "INT")
-    _connect(workflow, 1960, 0, 1951, "source_frames", "IMAGE")
-    _connect(workflow, 1960, 1, 1951, "source_audio", "AUDIO")
+    _connect(workflow, 1960, 0, 1951, "source_timeline", "H3_NATIVE_VIDEO_TIMELINE")
+    _connect(workflow, 1702, 0, 1951, "state", "H3_CHAIN_STATE")
+    _connect(workflow, 1960, 1, 1951, "inference_audio", "AUDIO")
     _connect(workflow, 1951, 0, 1952, "video", "IMAGE")
     _connect(workflow, 1951, 1, 1952, "audio", "AUDIO")
     _connect(workflow, 1966, 0, 1952, "previous", "H3_TAGGED_REFERENCES")
     _connect(workflow, 1952, 0, 110, "references", "H3_TAGGED_REFERENCES")
-    _connect(workflow, 1952, 1, 1700, "generation_fingerprint", "STRING")
+    _connect(workflow, 1966, 1, 1973, "identity_fingerprint", "STRING")
+    _connect(workflow, 1960, 8, 1973, "source_fingerprint", "STRING")
+    _connect(workflow, 1973, 0, 1700, "generation_fingerprint", "STRING")
     _connect(workflow, 1960, 3, 1700, "plan_json_input", "STRING")
     for target_id in (1701, 1702, 1706, 1707, 1708, 1944):
         _connect(workflow, 1960, 1, target_id, "source_audio", "AUDIO")
@@ -434,8 +468,8 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     _connect(workflow, 1960, 4, 1961, "source_frame_count", "INT")
 
     for note_id, title, text in [
-        (1902, "CHARACTER REPLACEMENT INPUTS", "Four identity images own the replacement character. The source video owns motion, timing, camera, environment, cuts, and the final soundtrack. Missing source audio is replaced with same-duration silence."),
-        (1906, "NATIVE RECURSIVE LONG-VIDEO LOOP", "Plan -> Loop Start -> Current -> Tagged Ref2VA -> Motion Context -> Sampler -> Trim -> Segment Save -> Review -> Loop End -> Assemble -> Exact Trim. All expensive generation nodes are visible on this canvas."),
+        (1902, "CHARACTER REPLACEMENT INPUTS", "Four identity images own the replacement character. The source video owns motion, timing, camera, environment, cuts, and the final soundtrack. Source frames remain on disk until their current scene runs. Missing source audio is replaced with same-duration silence."),
+        (1906, "NATIVE RECURSIVE LONG-VIDEO LOOP", "Plan -> Loop Start -> Current -> Stream Current Source Scene -> Tagged Ref2VA -> Motion Context -> Sampler -> Trim -> Segment Save -> Review -> Loop End -> Assemble -> Exact Trim. All expensive generation nodes are visible on this canvas."),
         (1932, "QUEUE BEHAVIOR", "Queue once. Loop End recursively clones the visible sampling body for every auto-planned scene. The first assembled path is 617 inference frames; the green Exact Trim node is the actual 614-frame delivery with original audio or silence fallback."),
     ]:
         node = _node(workflow, note_id)
@@ -446,8 +480,8 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     workflow["groups"] = [
         {"id": 1, "title": "H3 MODEL STACK - 20 STEPS / TURBO LORAS DISABLED", "bounding": [-2112, -1152, 2200, 800], "color": "#3f789e", "flags": {}},
         {"id": 2, "title": "FOUR CHARACTER IDENTITY INPUTS", "bounding": [-4928, -352, 1888, 896], "color": "#744c8c", "flags": {}},
-        {"id": 3, "title": "SOURCE VIDEO -> AUTO 24 FPS / AUTO PLAN / SEQUENTIAL REFERENCE", "bounding": [-3072, 448, 2656, 1392], "color": "#2d7d66", "flags": {}},
-        {"id": 4, "title": "VISIBLE RECURSIVE BODY - REF2VA / CONTEXT / SAMPLE / TRIM / SAVE / REVIEW / LOOP", "bounding": [-704, -352, 5728, 1856], "color": "#744c8c", "flags": {}},
+        {"id": 3, "title": "SOURCE VIDEO -> STREAM METADATA / AUDIO / PLAN - FULL FRAMES STAY ON DISK", "bounding": [-3072, 448, 2656, 1392], "color": "#2d7d66", "flags": {}},
+        {"id": 4, "title": "VISIBLE RECURSIVE BODY - STREAM SCENE / REF2VA / CONTEXT / SAMPLE / TRIM / SAVE / REVIEW / LOOP", "bounding": [-704, -352, 5728, 1856], "color": "#744c8c", "flags": {}},
         {"id": 5, "title": "PLAN EDITOR - DYNAMIC JSON OVERRIDES THE 614-FRAME EXAMPLE", "bounding": [-704, 480, 3216, 1280], "color": "#3f789e", "flags": {}},
         {"id": 6, "title": "FINAL ASSEMBLY + EXACT SOURCE-LENGTH DELIVERY", "bounding": [5056, -352, 1312, 704], "color": "#2f6b3f", "flags": {}},
         {"id": 7, "title": "DISABLED RECOVERY PATH", "bounding": [5056, 320, 1056, 736], "color": "#8a5a2b", "flags": {}},
@@ -464,6 +498,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
         "raw_scene_lengths": [124, 124, 124, 124, 124, 107],
         "context_frames": 22,
         "final_exact_trim": True,
+        "source_loading": "streamed current-scene windows; full source frames remain on disk",
     }
     _rebuild_link_fields(workflow)
     return workflow
