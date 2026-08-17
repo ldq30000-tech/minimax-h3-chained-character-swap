@@ -9,6 +9,13 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / "assets" / "workflows"
 STABLE = WORKFLOWS / "h3-native-loop-final-stable-ui.json"
 EXPERIMENTAL = WORKFLOWS / "h3-native-loop-final-turbo-experimental-ui.json"
+USER_NORMAL = (
+    WORKFLOWS / "h3-native-loop-user-final-no-audio-compatible-ui.json"
+)
+USER_LOW_VRAM = (
+    WORKFLOWS
+    / "h3-native-loop-user-final-no-audio-compatible-low-vram-ui.json"
+)
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
@@ -103,6 +110,123 @@ class ReleaseWorkflowTests(unittest.TestCase):
             )
         )
         self.assertIn("warning", self.experimental["extra"]["release"])
+
+
+class UserReleaseWorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.profiles = {
+            "normal": json.loads(USER_NORMAL.read_text(encoding="utf-8")),
+            "low_vram": json.loads(USER_LOW_VRAM.read_text(encoding="utf-8")),
+        }
+
+    @staticmethod
+    def nodes(workflow: dict) -> dict[int, dict]:
+        return {int(node["id"]): node for node in workflow["nodes"]}
+
+    def test_user_profiles_have_portable_inputs_and_no_private_run_names(self) -> None:
+        expected = {
+            1945: "character_front.png",
+            1946: "character_side.png",
+            1963: "character_back.png",
+            1964: "character_face_closeup.png",
+            1950: "source_video.mp4",
+        }
+        private_markers = ("01a005", "干什么", "9b1c0f6c", "_614f")
+        for workflow in self.profiles.values():
+            with self.subTest(variant=workflow["extra"]["release"]["variant"]):
+                nodes = self.nodes(workflow)
+                self.assertEqual(
+                    {node_id: nodes[node_id]["widgets_values"][0] for node_id in expected},
+                    expected,
+                )
+                serialized = json.dumps(workflow, ensure_ascii=False)
+                self.assertFalse(any(marker in serialized for marker in private_markers))
+
+    def test_user_profiles_preserve_active_lightx2v_route(self) -> None:
+        for workflow in self.profiles.values():
+            with self.subTest(variant=workflow["extra"]["release"]["variant"]):
+                nodes = self.nodes(workflow)
+                turbo = nodes[1972]
+                self.assertEqual(turbo["mode"], 0)
+                self.assertIn("ENABLED", turbo["title"])
+                self.assertNotIn("DISABLED", turbo["title"])
+                self.assertIn("lightx2v_turbo", turbo["widgets_values"][0])
+                self.assertEqual(
+                    nodes[1]["widgets_values"][0],
+                    "minimax\\minimax_h3_ref2va_int8_convrot.safetensors",
+                )
+                self.assertTrue(
+                    any(int(link[3]) == 1972 for link in workflow["links"])
+                )
+                self.assertTrue(
+                    any(int(link[1]) == 1972 for link in workflow["links"])
+                )
+                self.assertEqual(
+                    workflow["extra"]["release"]["turbo_lora"],
+                    "enabled and connected user profile",
+                )
+
+    def test_user_profiles_use_comfy_kitchen_attention_before_lightx2v(self) -> None:
+        for workflow in self.profiles.values():
+            with self.subTest(variant=workflow["extra"]["release"]["variant"]):
+                nodes = self.nodes(workflow)
+                attention_ids = [
+                    node_id
+                    for node_id, node in nodes.items()
+                    if node["type"] == "ModelAttentionBackend"
+                ]
+                self.assertEqual(len(attention_ids), 1)
+                attention_id = attention_ids[0]
+                self.assertEqual(
+                    nodes[attention_id]["widgets_values"],
+                    ["comfy kitchen attention"],
+                )
+                self.assertTrue(
+                    any(
+                        int(link[1]) == 1971 and int(link[3]) == attention_id
+                        for link in workflow["links"]
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        int(link[1]) == attention_id and int(link[3]) == 1972
+                        for link in workflow["links"]
+                    )
+                )
+
+    def test_user_profile_frame_caps_and_examples_match(self) -> None:
+        expected = {
+            "normal": (124, [124, 124, 124, 124, 124, 107]),
+            "low_vram": (107, [107, 107, 107, 107, 107, 107, 107]),
+        }
+        for name, workflow in self.profiles.items():
+            with self.subTest(profile=name):
+                frame_cap, lengths = expected[name]
+                nodes = self.nodes(workflow)
+                plan = json.loads(nodes[1700]["widgets_values"][0])
+                self.assertEqual(nodes[1960]["widgets_values"][1], frame_cap)
+                self.assertEqual(nodes[110]["widgets_values"][3], frame_cap)
+                self.assertEqual(
+                    [int(shot["length"]) for shot in plan["shots"]], lengths
+                )
+                self.assertEqual(
+                    workflow["extra"]["release"]["scene_frame_cap"], frame_cap
+                )
+
+    def test_user_profiles_keep_silent_audio_fallback_and_final_preview(self) -> None:
+        for workflow in self.profiles.values():
+            with self.subTest(variant=workflow["extra"]["release"]["variant"]):
+                nodes = self.nodes(workflow)
+                final = nodes[1961]
+                inputs = {value["name"]: value for value in final["inputs"]}
+                self.assertIsNotNone(inputs["source_frame_count"]["link"])
+                self.assertIsNotNone(inputs["source_audio"]["link"])
+                self.assertIn("PLAYABLE PREVIEW", final["title"])
+                self.assertIn(
+                    "silence fallback",
+                    workflow["extra"]["release"]["missing_audio"],
+                )
 
 
 if __name__ == "__main__":

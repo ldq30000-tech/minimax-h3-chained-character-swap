@@ -121,6 +121,29 @@ class ComfyNodeTests(unittest.TestCase):
         delivered = lengths[0] + sum(length - 22 for length in lengths[1:])
         self.assertEqual(delivered, 532 + padding)
 
+    def test_native_loop_rebalances_tail_without_exceeding_frame_cap(self) -> None:
+        lengths, padding = nodes._native_loop_lengths(362, 124, 22)
+        self.assertEqual(lengths, [124, 124, 90, 90])
+        self.assertEqual(padding, 0)
+        self.assertLessEqual(max(lengths), 124)
+        delivered = lengths[0] + sum(length - 22 for length in lengths[1:])
+        self.assertEqual(delivered, 362)
+
+    def test_native_loop_107_frame_profile_uses_more_bounded_scenes(self) -> None:
+        lengths, padding = nodes._native_loop_lengths(362, 107, 22)
+        self.assertEqual(lengths, [107, 107, 107, 107])
+        self.assertEqual(padding, 0)
+        self.assertLessEqual(max(lengths), 107)
+
+    def test_native_loop_107_frame_profile_never_folds_tail_over_cap(self) -> None:
+        for source_frames in range(108, 1001):
+            lengths, padding = nodes._native_loop_lengths(source_frames, 107, 22)
+            self.assertLessEqual(max(lengths), 107)
+            self.assertTrue(all(length >= 90 for length in lengths))
+            self.assertTrue(all((length - 5) % 17 == 0 for length in lengths))
+            delivered = lengths[0] + sum(length - 22 for length in lengths[1:])
+            self.assertEqual(delivered, source_frames + padding)
+
     @unittest.skipUnless(importlib.util.find_spec("torch"), "requires PyTorch")
     def test_native_loop_synthesizes_silence_when_source_has_no_audio(self) -> None:
         import torch

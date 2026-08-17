@@ -5,6 +5,26 @@
 Import `assets/workflows/h3-native-loop-final-stable-ui.json` into ComfyUI.
 It is the supported release variant of the final single-canvas workflow.
 
+The user's latest configurations are also published as separate portable files:
+
+- `h3-native-loop-user-final-no-audio-compatible-ui.json`: 124-frame scene cap.
+- `h3-native-loop-user-final-no-audio-compatible-low-vram-ui.json`: 107-frame
+  scene cap and a matching seven-scene placeholder plan.
+
+Both user files preserve the active connected LightX2V Turbo LoRA, 576x1024,
+24 fps, `res_multistep`, `beta`, 20 steps, 22-frame Motion Context, missing-audio
+silence fallback, exact final trim, and final-video playback on the canvas. Their
+media widgets and static run names were replaced with portable placeholders.
+The latest saved user configuration selects
+`minimax_h3_ref2va_int8_convrot.safetensors`; the Stable workflow remains on its
+separate `pruned_int8_convrot` model path.
+It also replaces the user profile's former KJ SageAttention route with the
+ComfyUI Core `ModelAttentionBackend` set to `comfy kitchen attention`, between
+ReservedVRAM and the active LightX2V LoRA. This option must be available in the
+installed ComfyUI Core build to reproduce the same route.
+They reproduce the user-modified setup and do not replace the conservative
+supported default or guarantee model/LoRA compatibility on another installation.
+
 The user-authored final canvas also contained an enabled Turbo 4-step LoRA route.
 That route is preserved separately as
 `assets/workflows/h3-native-loop-final-turbo-experimental-ui.json`, but it is not
@@ -30,15 +50,22 @@ non-pruned base and the LoRA's documented sampling schedule.
   same-duration 44.1 kHz mono silence instead of failing preparation.
 - The final exact-trim output publishes a playable video preview and its saved path
   directly on the workflow canvas.
+- The custom-node web extension can restore the latest matching final MP4 in that
+  preview after ComfyUI restarts.
 - `res_multistep`, `beta`, 20 steps, and denoise 1.0 are the stable defaults.
-- The streamed release retains 576x1024 output, 24 fps indexing, 20 steps, the
-  existing seeds, and 22-frame Motion Context; the memory fix does not lower quality.
+- The stable low-VRAM profile caps scenes at 107 frames so 12 GB systems avoid
+  the observed 141/158-frame paging cliff. The planner may add inference-only
+  tail padding to keep every scene bounded; Exact Trim removes it from delivery.
+- The low-VRAM profile retains 576x1024 output, 24 fps indexing, 20 steps, the
+  existing seeds, and 22-frame Motion Context. It does add some segment boundaries,
+  so seam review remains required and identical output quality is not guaranteed.
 
-The local integration run used 614 source frames at 576x1024 and produced a
-614-frame, 24 fps, 25.583333-second H.264/AAC final. The six-segment run completed
-in about 2 hours 29 minutes on an RTX 5070 Ti Laptop GPU with 12 GB VRAM. This is
-an environment-specific validation record, not a performance or minimum-memory
-guarantee.
+The historical local integration run used the earlier 124-frame scene profile with
+614 source frames at 576x1024 and produced a 614-frame, 24 fps, 25.583333-second
+H.264/AAC final. That six-segment run completed in about 2 hours 29 minutes on an
+RTX 5070 Ti Laptop GPU with 12 GB VRAM. The current 107-frame profile targets lower
+peak memory and has not been given the same full-duration benchmark. These records
+are not a performance or minimum-memory guarantee.
 
 The streamed-source update was additionally checked against the actual 768-frame,
 720x1280, 30 fps, 25.6-second reference. Preparation reported 614 unique 24 fps

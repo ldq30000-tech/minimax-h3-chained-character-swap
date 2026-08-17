@@ -308,9 +308,9 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
                 {"name": "status", "type": "STRING", "links": None},
                 {"name": "source_fingerprint", "type": "STRING", "links": None},
             ],
-            "title": "STREAM METADATA + AUTO PLAN + AUDIO FALLBACK - NO FULL FRAME BATCH",
+            "title": "12GB LOW VRAM - 107F BOUNDED AUTO PLAN + AUDIO FALLBACK",
             "properties": {"Node name for S&R": "H3NativeLongVideoPrepare"},
-            "widgets_values": [PROMPT, 124, 22, 20, 730000],
+            "widgets_values": [PROMPT, 107, 22, 20, 730000],
             "color": "#215c55",
             "bgcolor": "rgba(24,24,27,.95)",
         },
@@ -478,7 +478,7 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
     _node(workflow, 1902)["pos"] = [-2112, -1536]
 
     workflow["groups"] = [
-        {"id": 1, "title": "H3 MODEL STACK - 20 STEPS / TURBO LORAS DISABLED", "bounding": [-2112, -1152, 2200, 800], "color": "#3f789e", "flags": {}},
+        {"id": 1, "title": "12GB LOW VRAM PROFILE - 107 FRAMES / 20 STEPS / TURBO LORAS DISABLED", "bounding": [-2112, -1152, 2200, 800], "color": "#3f789e", "flags": {}},
         {"id": 2, "title": "FOUR CHARACTER IDENTITY INPUTS", "bounding": [-4928, -352, 1888, 896], "color": "#744c8c", "flags": {}},
         {"id": 3, "title": "SOURCE VIDEO -> STREAM METADATA / AUDIO / PLAN - FULL FRAMES STAY ON DISK", "bounding": [-3072, 448, 2656, 1392], "color": "#2d7d66", "flags": {}},
         {"id": 4, "title": "VISIBLE RECURSIVE BODY - STREAM SCENE / REF2VA / CONTEXT / SAMPLE / TRIM / SAVE / REVIEW / LOOP", "bounding": [-704, -352, 5728, 1856], "color": "#744c8c", "flags": {}},
@@ -495,7 +495,8 @@ def build(base_workflow: Path, source_name: str, image_names: list[str]) -> dict
         "source_frames": 614,
         "inference_frames": 617,
         "inference_padding_frames": 3,
-        "raw_scene_lengths": [124, 124, 124, 124, 124, 107],
+        "raw_scene_lengths": [107, 107, 107, 107, 107, 107, 107],
+        "profile": "low_vram_12gb_107f",
         "context_frames": 22,
         "final_exact_trim": True,
         "source_loading": "streamed current-scene windows; full source frames remain on disk",

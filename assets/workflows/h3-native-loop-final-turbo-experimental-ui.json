@@ -2621,13 +2621,13 @@
           ]
         }
       ],
-      "title": "STREAM METADATA + AUTO PLAN + AUDIO FALLBACK - NO FULL FRAME BATCH",
+      "title": "12GB LOW VRAM - 107F BOUNDED AUTO PLAN + AUDIO FALLBACK",
       "properties": {
         "Node name for S&R": "H3NativeLongVideoPrepare"
       },
       "widgets_values": [
         "subject_definitions:\n@character_front, @character_side, and @character_back define the exact target character from the front, side, and back, including identity, face, hair, body proportions, skin, clothing, accessories, and silhouette.\n@character_face is the high-resolution close-up identity reference for the target character's facial structure, eyes, hairline, and close-range details.\n@motion is the current sequential slice of the original source video. It owns the source performer's pose sequence, action, speed, rhythm, screen position, body scale, framing, camera movement, shot timing, lighting, environment, and edit structure at every timestamp.\n@motion_audio is the synchronized source-audio slice paired with @motion. Use it only to keep visual timing synchronized; the exact original source track is restored after final assembly.\n<Subject 1> is the target character defined jointly by @character_front, @character_side, @character_back, and @character_face. <Subject 1> completely replaces the main source performer for the entire current source slice.\n<Subject 2> is the environment, camera, lighting, background, props, and all non-performer content in @motion.\n\nsummary:\n[video editing] Replace the main performer in every shot and after every visible cut in @motion with <Subject 1>. Preserve the original source timeline, actions, pacing, composition, camera work, environment, and edit timing one-to-one.\n\nretention_analysis:\n<Subject 1> (appears throughout every shot in the current source slice): attribute_transfer - use the complete target identity and outfit from @character_front, @character_side, @character_back, and @character_face while following the source performer's body position, pose sequence, movement direction, speed, timing, and rhythm from @motion one-to-one.\n<Subject 2> (appears throughout every shot in the current source slice): fully_preserved - preserve environment geometry, lighting direction and exposure, camera path, lens behavior, framing, background motion, props, and shot structure from @motion.\n@motion (complete target timeline and shot structure): fully_preserved - its temporal order, every cut, motion phase, pace, framing, and camera path define every physical output frame.\n@motion_audio: fully_preserved in delivery - it is timing guidance during generation and the original full source waveform is copied back after the exact final trim.\n\ndetailed_description:\n[Shot 1] <Subject 1> replaces the source performer throughout the current sequential @motion slice, including after any hard cut or new camera angle inside the slice. Keep the same body scale, ground position, framing, scene geometry, lighting, camera movement, and occlusion order as @motion. Every pose, transition, movement direction, speed, facial orientation, and rhythm follows @motion at the same timestamp. The 22-frame head overlap on continuation scenes reconstructs the incoming Motion Context and is removed before delivery. Motion must advance into new source timestamps without restarting frame zero, pausing, replaying, compressing time, skipping forward, or anticipating a segment boundary. Keep the background clean, stable, correctly exposed, and free of chromatic noise, color blotches, identity leakage, and compression artifacts.\n\noverall_soundscape:\nPreserve the original source soundtrack exactly in final delivery. Do not replace dialogue, music, ambience, or timing; @motion_audio is synchronized guidance only during Ref2VA generation.\n\nnon_diegetic_music:\nN/A - do not generate replacement music; the original source track is muxed after assembly.",
-        124,
+        107,
         22,
         20,
         730000
@@ -3700,7 +3700,7 @@
   "groups": [
     {
       "id": 1,
-      "title": "H3 MODEL STACK - 20 STEPS / TURBO LORAS DISABLED",
+      "title": "12GB LOW VRAM PROFILE - 107 FRAMES / 20 STEPS / TURBO LORAS DISABLED",
       "bounding": [
         -2112,
         -1152,
@@ -3808,13 +3808,15 @@
       "inference_frames": 617,
       "inference_padding_frames": 3,
       "raw_scene_lengths": [
-        124,
-        124,
-        124,
-        124,
-        124,
+        107,
+        107,
+        107,
+        107,
+        107,
+        107,
         107
       ],
+      "profile": "low_vram_12gb_107f",
       "context_frames": 22,
       "final_exact_trim": true,
       "source_loading": "streamed current-scene windows; full source frames remain on disk"
