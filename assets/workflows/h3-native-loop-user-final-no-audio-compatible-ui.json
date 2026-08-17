@@ -1,8 +1,8 @@
 {
   "id": "bd4365b2-07bd-4b12-9bae-14003720d329",
   "revision": 0,
-  "last_node_id": 1974,
-  "last_link_id": 169,
+  "last_node_id": 1975,
+  "last_link_id": 172,
   "nodes": [
     {
       "id": 1,
@@ -296,7 +296,7 @@
       ],
       "size": [
         1120,
-        1757.390625
+        1774.625
       ],
       "flags": {},
       "order": 34,
@@ -367,7 +367,7 @@
         26
       ],
       "flags": {},
-      "order": 17,
+      "order": 18,
       "mode": 0,
       "inputs": [
         {
@@ -403,7 +403,7 @@
         26
       ],
       "flags": {},
-      "order": 18,
+      "order": 19,
       "mode": 0,
       "inputs": [
         {
@@ -531,7 +531,7 @@
         26
       ],
       "flags": {},
-      "order": 22,
+      "order": 23,
       "mode": 0,
       "inputs": [
         {
@@ -567,7 +567,7 @@
         26
       ],
       "flags": {},
-      "order": 23,
+      "order": 24,
       "mode": 0,
       "inputs": [
         {
@@ -842,7 +842,7 @@
         26
       ],
       "flags": {},
-      "order": 26,
+      "order": 27,
       "mode": 0,
       "inputs": [
         {
@@ -1189,7 +1189,7 @@
         160
       ],
       "flags": {},
-      "order": 28,
+      "order": 26,
       "mode": 0,
       "inputs": [
         {
@@ -1249,7 +1249,7 @@
         26
       ],
       "flags": {},
-      "order": 30,
+      "order": 29,
       "mode": 0,
       "inputs": [
         {
@@ -1284,7 +1284,7 @@
         26
       ],
       "flags": {},
-      "order": 32,
+      "order": 31,
       "mode": 0,
       "inputs": [
         {
@@ -1716,7 +1716,7 @@
         -256
       ],
       "size": [
-        387.3125,
+        387.328125,
         288
       ],
       "flags": {},
@@ -1984,7 +1984,7 @@
       ],
       "size": [
         1024,
-        3135.953125
+        3162.75
       ],
       "flags": {},
       "order": 33,
@@ -2237,7 +2237,7 @@
       ],
       "size": [
         736,
-        1532.046875
+        1535.3125
       ],
       "flags": {},
       "order": 52,
@@ -2502,50 +2502,6 @@
       "bgcolor": "rgba(24,24,27,.9)"
     },
     {
-      "id": 1970,
-      "type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
-      "pos": [
-        -979.0462377899772,
-        -1142.1476300561465
-      ],
-      "size": [
-        330,
-        58
-      ],
-      "flags": {},
-      "order": 21,
-      "mode": 0,
-      "inputs": [
-        {
-          "localized_name": "model",
-          "name": "model",
-          "type": "MODEL",
-          "link": 133
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "model",
-          "name": "model",
-          "type": "MODEL",
-          "links": [
-            168
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-kjnodes",
-        "ver": "8692bc8ef8beaaeee80fd52ba80477dc9e61547b",
-        "Node name for S&R": "MiniMaxH3MemoryEfficientSageAttentionPatch",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.8"
-        }
-      },
-      "widgets_values": []
-    },
-    {
       "id": 1971,
       "type": "ReservedVRAMSetter",
       "pos": [
@@ -2557,7 +2513,7 @@
         238
       ],
       "flags": {},
-      "order": 16,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -2619,7 +2575,7 @@
           "name": "output",
           "type": "*",
           "links": [
-            133
+            171
           ]
         },
         {
@@ -2662,18 +2618,18 @@
         -881.9230552343133
       ],
       "size": [
-        513.46875,
+        513.484375,
         114
       ],
       "flags": {},
-      "order": 25,
+      "order": 22,
       "mode": 0,
       "inputs": [
         {
           "localized_name": "模型",
           "name": "model",
           "type": "MODEL",
-          "link": 168
+          "link": 172
         },
         {
           "localized_name": "LoRA名称",
@@ -3006,7 +2962,7 @@
         192
       ],
       "flags": {},
-      "order": 19,
+      "order": 20,
       "mode": 0,
       "inputs": [
         {
@@ -3076,7 +3032,7 @@
         192
       ],
       "flags": {},
-      "order": 24,
+      "order": 25,
       "mode": 0,
       "inputs": [
         {
@@ -3146,7 +3102,7 @@
         192
       ],
       "flags": {},
-      "order": 27,
+      "order": 28,
       "mode": 0,
       "inputs": [
         {
@@ -3216,7 +3172,7 @@
         192
       ],
       "flags": {},
-      "order": 29,
+      "order": 30,
       "mode": 0,
       "inputs": [
         {
@@ -3343,7 +3299,7 @@
         896
       ],
       "flags": {},
-      "order": 20,
+      "order": 21,
       "mode": 0,
       "inputs": [
         {
@@ -3760,7 +3716,7 @@
         176
       ],
       "flags": {},
-      "order": 31,
+      "order": 32,
       "mode": 0,
       "inputs": [
         {
@@ -3853,6 +3809,57 @@
       ],
       "color": "#2d4b58",
       "bgcolor": "rgba(24,24,27,.92)"
+    },
+    {
+      "id": 1975,
+      "type": "ModelAttentionBackend",
+      "pos": [
+        -971.7709634652866,
+        -1139.6858149434925
+      ],
+      "size": [
+        288,
+        86
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 171
+        },
+        {
+          "localized_name": "attention",
+          "name": "attention",
+          "type": "COMBO",
+          "widget": {
+            "name": "attention"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "模型",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            172
+          ]
+        }
+      ],
+      "title": "COMFY KITCHEN ATTENTION",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.31.0",
+        "Node name for S&R": "ModelAttentionBackend"
+      },
+      "widgets_values": [
+        "comfy kitchen attention"
+      ]
     }
   ],
   "links": [
@@ -4329,14 +4336,6 @@
       "CONDITIONING"
     ],
     [
-      133,
-      1971,
-      0,
-      1970,
-      0,
-      "MODEL"
-    ],
-    [
       135,
       1,
       0,
@@ -4569,18 +4568,26 @@
       "INT"
     ],
     [
-      168,
-      1970,
-      0,
-      1972,
-      0,
-      "MODEL"
-    ],
-    [
       169,
       1972,
       0,
       5,
+      0,
+      "MODEL"
+    ],
+    [
+      171,
+      1971,
+      0,
+      1975,
+      0,
+      "MODEL"
+    ],
+    [
+      172,
+      1975,
+      0,
+      1972,
       0,
       "MODEL"
     ]
@@ -4674,10 +4681,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.8501229531921227,
+      "scale": 0.5806454157449101,
       "offset": [
-        1800.1459512836414,
-        1338.155643608654
+        2411.3981196917143,
+        1719.8382832206428
       ]
     },
     "frontendVersion": "1.48.7",

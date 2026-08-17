@@ -167,6 +167,34 @@ class UserReleaseWorkflowTests(unittest.TestCase):
                     "enabled and connected user profile",
                 )
 
+    def test_user_profiles_use_comfy_kitchen_attention_before_lightx2v(self) -> None:
+        for workflow in self.profiles.values():
+            with self.subTest(variant=workflow["extra"]["release"]["variant"]):
+                nodes = self.nodes(workflow)
+                attention_ids = [
+                    node_id
+                    for node_id, node in nodes.items()
+                    if node["type"] == "ModelAttentionBackend"
+                ]
+                self.assertEqual(len(attention_ids), 1)
+                attention_id = attention_ids[0]
+                self.assertEqual(
+                    nodes[attention_id]["widgets_values"],
+                    ["comfy kitchen attention"],
+                )
+                self.assertTrue(
+                    any(
+                        int(link[1]) == 1971 and int(link[3]) == attention_id
+                        for link in workflow["links"]
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        int(link[1]) == attention_id and int(link[3]) == 1972
+                        for link in workflow["links"]
+                    )
+                )
+
     def test_user_profile_frame_caps_and_examples_match(self) -> None:
         expected = {
             "normal": (124, [124, 124, 124, 124, 124, 107]),

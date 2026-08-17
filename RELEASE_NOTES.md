@@ -18,6 +18,10 @@ media widgets and static run names were replaced with portable placeholders.
 The latest saved user configuration selects
 `minimax_h3_ref2va_int8_convrot.safetensors`; the Stable workflow remains on its
 separate `pruned_int8_convrot` model path.
+It also replaces the user profile's former KJ SageAttention route with the
+ComfyUI Core `ModelAttentionBackend` set to `comfy kitchen attention`, between
+ReservedVRAM and the active LightX2V LoRA. This option must be available in the
+installed ComfyUI Core build to reproduce the same route.
 They reproduce the user-modified setup and do not replace the conservative
 supported default or guarantee model/LoRA compatibility on another installation.
 

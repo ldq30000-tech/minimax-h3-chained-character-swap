@@ -93,7 +93,8 @@ long at 24 fps, for example:
 Two portable copies of the user's current final canvas are included:
 
 - `h3-native-loop-user-final-no-audio-compatible-ui.json` keeps the 124-frame
-  cap, missing-audio fallback, active LightX2V LoRA route, and 20-step profile.
+  cap, missing-audio fallback, Comfy Kitchen attention, active LightX2V LoRA
+  route, and 20-step profile.
 - `h3-native-loop-user-final-no-audio-compatible-low-vram-ui.json` keeps the
   same route but lowers the cap to 107 frames and uses a seven-scene 107-frame
   placeholder plan.
@@ -103,6 +104,13 @@ general compatibility claim for every H3 base, LoRA revision, or GPU. For the
 conservative release canvas, import
 `assets/workflows/h3-native-loop-final-stable-ui.json`, which keeps Turbo LoRAs
 disabled and disconnected.
+
+The current user profiles route `UNET -> ReservedVRAM -> ModelAttentionBackend
+(comfy kitchen attention) -> LightX2V LoRA -> H3`. `ModelAttentionBackend` is a
+ComfyUI Core node, not a separate Comfy Kitchen plugin, but the exact profile
+requires a Core build where `comfy kitchen attention` is available. Selecting
+`pytorch attention` instead can keep a different installation runnable, but it
+does not reproduce this attention backend.
 
 All three final canvases automatically count
 and segment a complete source video without holding the complete decoded frame
@@ -230,6 +238,8 @@ ln -s /path/to/minimax-h3-chained-character-swap \
 - ComfyUI with MiniMax H3 Ref2VA support.
 - A current ComfyUI build whose native `VIDEO` input provides streamed metadata,
   source access, and `as_trimmed()` scene windows.
+- For the current user-final profiles: ComfyUI Core v0.31+ with
+  `ModelAttentionBackend` and the `comfy kitchen attention` option available.
 - A compatible Motion Context node pack.
 - Python 3.10+, FFmpeg, and Pillow (`python3 -m pip install -r requirements.txt`).
 - 24 fps source slices. Resample other frame rates before slicing; the runner rejects non-24-fps inputs.

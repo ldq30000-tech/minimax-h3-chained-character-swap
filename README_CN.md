@@ -7,7 +7,7 @@
 
 | 文件 | 用途 |
 |---|---|
-| `assets/workflows/h3-native-loop-user-final-no-audio-compatible-ui.json` | 用户最终配置；124 帧/段、无音频兼容、活动 LightX2V LoRA、画布成片预览 |
+| `assets/workflows/h3-native-loop-user-final-no-audio-compatible-ui.json` | 用户最终配置；124 帧/段、无音频兼容、Comfy Kitchen 注意力、活动 LightX2V LoRA、画布成片预览 |
 | `assets/workflows/h3-native-loop-user-final-no-audio-compatible-low-vram-ui.json` | 用户最终低显存配置；107 帧/段，其余链路与普通版一致 |
 | `assets/workflows/h3-native-loop-final-stable-ui.json` | 推荐的 12 GB 低显存稳定版；107 帧/段，Turbo LoRA 已断开 |
 | `assets/workflows/h3-native-loop-final-turbo-experimental-ui.json` | 保留最终画布中的 Turbo 路线，仅供兼容模型实验 |
@@ -38,7 +38,7 @@ Git 源码历史不包含模型、源视频、人物参考图或生成成片；�
 5. **连续而不重播时间线。** 每段读取连续源时间戳，后续段使用前一段干净输出的 22 帧尾部建立 Motion Context，然后删除重复上下文。
 6. **原声音轨自动恢复。** 中间生成音频仅用于链路；最终 MP4 重新封装原视频声音并保持源时长。源视频没有可解码音轨时，工作流自动生成同长度的 44.1 kHz 单声道静音，不再中止。最终精确裁剪节点会在画布中直接显示可播放的视频预览和保存路径。
 7. **可诊断、可恢复。** 每段保存 MP4、音频与 safetensors 检查点；Review Gate 可见但默认关闭；完整片段可以不重新采样而恢复合并。源视频内容也进入检查点指纹，更换视频不会误用旧片段。
-8. **低显存辅助链。** 最终画布保留 ReservedVRAM 与 KJNodes 的 H3 SageAttention patch。12 GB 环境已经完成过实例运行，但不代表最低显存保证。
+8. **低显存辅助链。** 用户最终版在 ReservedVRAM 后使用 ComfyUI Core 的 `ModelAttentionBackend`，选择 `comfy kitchen attention`；保守稳定版仍保留 KJNodes 的 H3 SageAttention patch。12 GB 环境已经完成过实例运行，但不代表最低显存保证。
 9. **保守稳定版与用户配置分开。** 稳定版继续断开 Turbo LoRA；两份用户最终版则按本机修改保留活动 LightX2V LoRA 与 20 步采样，便于复现实际配置，不把它冒充为所有模型环境都兼容的默认方案。
 
 这些改进提升的是自动化、可观察性、时间线完整性和恢复能力；它们不构成逐帧动作严格控制，也不能取消人工质量检查。
@@ -47,7 +47,7 @@ Git 源码历史不包含模型、源视频、人物参考图或生成成片；�
 
 - Windows 或 Linux，Python 3.10+。
 - 支持当前 ComfyUI/PyTorch 的 NVIDIA CUDA 环境。
-- 使用较新的 ComfyUI；其原生 `VIDEO` 输入必须支持流式元数据、源文件访问和 `as_trimmed()` 分段读取。
+- 使用较新的 ComfyUI；其原生 `VIDEO` 输入必须支持流式元数据、源文件访问和 `as_trimmed()` 分段读取。两份用户最终版还需要提供 `ModelAttentionBackend` 与 `comfy kitchen attention` 选项的 Core v0.31+ 构建。
 - FFmpeg 与 FFprobe 可在 `PATH` 中调用。
 - 足够的 GPU 显存、系统内存和模型存储。上游 RH 节点以 24 GB 级单卡为主要目标；更低显存依赖强卸载并会显著变慢。
 - 输入必须是用户有权使用的源视频、角色参考图和模型。
@@ -93,6 +93,12 @@ LightX2V 路线，并继续使用 `res_multistep`、`beta`、20 步。这是用�
 模型文件名和节点版本一致。当前两份用户版使用
 `minimax_h3_ref2va_int8_convrot.safetensors`；保守稳定版仍使用带 `pruned_`
 前缀的模型文件，需要保守配置时改用 `final-stable`。
+
+当前用户版的模型顺序为 `UNET -> ReservedVRAM -> ModelAttentionBackend
+(comfy kitchen attention) -> LightX2V LoRA -> H3`。这是 ComfyUI Core 节点，不需要
+额外安装 Comfy Kitchen 插件；但只有 Core 下拉框中确实出现该选项时才能复现当前
+配置。若本机没有该选项，将该节点改成 `pytorch attention` 可以继续运行，但不等同于
+这份用户配置的注意力后端。
 
 ## 输入文件
 
