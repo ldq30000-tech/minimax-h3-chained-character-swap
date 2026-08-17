@@ -240,6 +240,7 @@ The supplied workflows reference these loader filenames and must be adjusted if 
 
 ```text
 minimax_h3_ref2va_pruned_int8_convrot.safetensors
+minimax_h3_ref2va_int8_convrot.safetensors
 qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
 minimax_h3_video_vae_fp16.safetensors
 minimax_h3_audio_vae_fp32.safetensors
@@ -247,6 +248,10 @@ minimax_h3_ref2v_lightx2v_turbo_4step_v0.1_resized_avg_rank_20_bf16.safetensors
 ```
 
 See [upstream dependencies and licensing](references/UPSTREAM_DEPENDENCIES.md) before use.
+
+The two `user-final` workflows currently use
+`minimax_h3_ref2va_int8_convrot.safetensors`. The conservative Stable workflow
+continues to use `minimax_h3_ref2va_pruned_int8_convrot.safetensors`.
 
 ## Development checks
 

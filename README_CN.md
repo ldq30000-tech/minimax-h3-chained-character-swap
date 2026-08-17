@@ -75,6 +75,7 @@ git clone https://github.com/Windecay/ComfyUI-ReservedVRAM.git
 
 ```text
 minimax/minimax_h3_ref2va_pruned_int8_convrot.safetensors
+minimax/minimax_h3_ref2va_int8_convrot.safetensors
 minimax/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors
 minimax/minimax_h3_video_vae_fp16.safetensors
 minimax/minimax_h3_audio_vae_fp32.safetensors
@@ -89,7 +90,9 @@ minimax/minimax_h3_ref2v_lightx2v_turbo_4step_v0.1_resized_avg_rank_20_bf16.safe
 两份 `user-final` 工作流不同：它们按用户当前修改保留节点 `1972` 的活动
 LightX2V 路线，并继续使用 `res_multistep`、`beta`、20 步。这是用户实测配置，
 不是对其他 H3 基础模型、LoRA 版本或显卡环境的兼容性保证。导入后先确认本机
-模型文件名和节点版本一致；需要保守配置时改用 `final-stable`。
+模型文件名和节点版本一致。当前两份用户版使用
+`minimax_h3_ref2va_int8_convrot.safetensors`；保守稳定版仍使用带 `pruned_`
+前缀的模型文件，需要保守配置时改用 `final-stable`。
 
 ## 输入文件
 

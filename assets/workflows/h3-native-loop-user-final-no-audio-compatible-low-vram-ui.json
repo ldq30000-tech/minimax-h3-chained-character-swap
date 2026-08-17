@@ -55,7 +55,7 @@
         "Node name for S&R": "UNETLoader"
       },
       "widgets_values": [
-        "minimax\\minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "minimax\\minimax_h3_ref2va_int8_convrot.safetensors",
         "default"
       ]
     },
@@ -4674,10 +4674,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.674373039626005,
+      "scale": 0.6743730396260057,
       "offset": [
-        2721.4217330974566,
-        1435.2406318818794
+        4524.022784470542,
+        654.109148848722
       ]
     },
     "frontendVersion": "1.48.7",

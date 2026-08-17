@@ -15,6 +15,9 @@ Both user files preserve the active connected LightX2V Turbo LoRA, 576x1024,
 24 fps, `res_multistep`, `beta`, 20 steps, 22-frame Motion Context, missing-audio
 silence fallback, exact final trim, and final-video playback on the canvas. Their
 media widgets and static run names were replaced with portable placeholders.
+The latest saved user configuration selects
+`minimax_h3_ref2va_int8_convrot.safetensors`; the Stable workflow remains on its
+separate `pruned_int8_convrot` model path.
 They reproduce the user-modified setup and do not replace the conservative
 supported default or guarantee model/LoRA compatibility on another installation.
 

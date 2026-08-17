@@ -152,6 +152,10 @@ class UserReleaseWorkflowTests(unittest.TestCase):
                 self.assertIn("ENABLED", turbo["title"])
                 self.assertNotIn("DISABLED", turbo["title"])
                 self.assertIn("lightx2v_turbo", turbo["widgets_values"][0])
+                self.assertEqual(
+                    nodes[1]["widgets_values"][0],
+                    "minimax\\minimax_h3_ref2va_int8_convrot.safetensors",
+                )
                 self.assertTrue(
                     any(int(link[3]) == 1972 for link in workflow["links"])
                 )
